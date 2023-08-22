@@ -2153,6 +2153,7 @@ def write_masks_to_netcdf(
     # figure out wether input is ensemble or not
     if len(cellss) == 0:
         members = [0]
+        cellss = [cellss]
 
     elif isinstance(cellss[0], Cell):
         members = [0]
