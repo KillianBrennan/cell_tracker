@@ -5,13 +5,12 @@ takes daily aggregated files as input
 input:
     inpath: path to input files
     outpath: path to output files
-    start_day: start day
-    end_day: end day
+    start_day: start day YYYYMMDD
+    end_day: end day YYYYMMDD
 
 output:
     cell_tracks_YYYYMMDD.json: json file containing cell tracks
     cell_masks_YYYYMMDD.nc: netcdf file containing cell masks
-
 
 example use
 
@@ -28,7 +27,7 @@ import numpy as np
 
 sys.path.insert(1, "/home/kbrennan/phd/scripts")
 
-from tracking.track_cells_v2 import (
+from cell_tracker import (
     Cell,
     track_cells,
     write_to_json,
