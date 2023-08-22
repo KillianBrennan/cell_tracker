@@ -43,8 +43,8 @@ def main(inpath, outpath, start_day, end_day):
     min_area = 16
     quiet = False
 
-    start_day = pd.to_datetime(start_day, format="%Y%m%d")
-    end_day = pd.to_datetime(end_day, format="%Y%m%d")
+    start_day = pd.to_datetime(start_day, format="%Y-%m-%dT%H")
+    end_day = pd.to_datetime(end_day, format="%Y-%m-%dT%H")
 
     daylist = pd.date_range(start_day, end_day)
 
