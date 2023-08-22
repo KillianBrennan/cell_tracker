@@ -25,15 +25,12 @@ import xarray as xr
 import pandas as pd
 import numpy as np
 
-sys.path.insert(1, "/home/kbrennan/phd/scripts")
-
 from cell_tracker import (
     Cell,
     track_cells,
     write_to_json,
     write_masks_to_netcdf,
 )
-
 
 def main(inpath, outpath, start_day, end_day):
     # set tracking parameters
