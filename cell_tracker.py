@@ -2219,7 +2219,7 @@ def write_masks_to_netcdf(
     ds.to_netcdf(filename)
 
     # compress netcdf file
-    os.system("nczip " + filename)
+    # os.system("nczip " + filename)
 
     return ds
 

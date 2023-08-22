@@ -131,7 +131,7 @@ def main(inpath, outpath, start_day, end_day):
         _ = write_masks_to_netcdf(cells, timesteps, field_static, outfile_nc)
 
         swath_gf_nc.to_netcdf(outfile_gapfilled)
-        os.system("nczip " + outfile_gapfilled)
+        # os.system("nczip " + outfile_gapfilled)
 
     print("finished tracking all days in queue")
     return
