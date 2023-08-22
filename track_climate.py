@@ -38,7 +38,7 @@ def main(inpath, outpath, start_day, end_day):
     dynamic_tracking = 4
     v_limit = 5
     min_area = 16
-    quiet = False
+    quiet = True
 
     start_day = pd.to_datetime(start_day, format="%Y-%m-%dT%H")
     end_day = pd.to_datetime(end_day, format="%Y-%m-%dT%H")
