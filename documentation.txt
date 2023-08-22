@@ -1,0 +1,48 @@
+\section{Tracking algorithm}\label{tracking_appendix}
+
+\subsection{Identification and segmentation}\label{identification}
+First, features are identified in a two-dimensional field using thresholds for various parameters described in the following. 
+A feature constitutes a set of grid points and has certain properties such as size, center of mass, magnitude, etc..
+The local maxima $M$ are then defined as connected sets (4-connectivity) of grid points with magnitudes strictly greater than the magnitudes of all pixels in direct neighborhood of the set. 
+Local maximas must fulfill the minimum distance threshold and will be neglected else wise.
+The prominence of a local maxima $M$ is defined as the magnitude difference between $M$ and the lowest isopleth encircling only $M$ and local maxima with magnitudes smaller than $M$. 
+Local maximas must fulfill the minimum prominence threshold and will be neglected else wise.
+Using local maxima obtained through the previous steps as seeds, a watershed segmentation algorithm is applied \citep{najman_watershed_1994}. 
+The watershed algorithm treats magnitudes as topography (elevation) and floods basins from the seeds until basins attributed to different seeds meet on watershed lines. 
+These basins are then associated with a unique label whose area encompasses a feature.
+In order to extend the label area spatially, a binary dilation is applied through kernel convolution, which only expands the label area into background regions and avoids overlap with neighboring label areas.
+
+\subsection{Forward movement anticipation}
+Using a geometrically decaying weighted mean of the feature movement vector history of the last $n$ timesteps, the labeled area from the previous timestep is shifted towards the expected position of the feature in the current timestep. 
+If the feature first emerges and has no previous vector, a flow field is extracted from nearby features and used as an initial movement vector.
+
+\subsection{Correspondence algorithm}
+Finding corresponding features between the current and previous timesteps is implemented by computing a tracking probability for all correspondence candidates.
+First, for any given feature, active in the last timestep, correspondence candidates in the current timestep are determined based on the non-zero overlap criterion.
+Next, all correspondence candidates are clustered into groups, whos correspondence assignment can be solved independently.
+If multiple corresponding features are found within an independent cluster, all possible candidate combination permutations are analyzed holistically for their overall tracking probability score within that cluster.
+A combination of the overlap surface area ratio and the feature size ratio is taken into account to calculate the score. 
+A similar solution to the correspondence problem was implemented \cite{rudisuhli_attribution_2018} and the probability score was directly adapted.
+
+Choosing the most likely correspondence combination with the highest probability score leads to the attribution of features that either start existing, carry on, cease to exist, split into multiple features, or are merged into another feature.
+Currently, clusters with up to 15 correspondence possibilities leading to a permutation of size $2^{15}$ can be scored efficiently (in \SI{<1}{\second}).
+
+\subsection{Swath gap filling}\label{swath_gap_filling}
+One application of the cell tracks includes reducing the ‘fishbone effect’, a term coined in \cite{lukach_estimating_2017}, describing the discontinuous hail swaths caused by the low temporal sampling of fast-moving and short (in the direction of movement) cells. 
+The ‘fishbone effect’ could especially bias damage models, as the hail-affected area is underestimated. 
+Gaps in the hail swaths are present, even with a relatively high temporal sampling of \SI{5}{\minute} (Fig. \ref{fig:swath_gap_filling_a}).
+
+To fill the hail swath gaps, cell footprints from two adjacent timesteps can be linearly interpolated to form an intermittent cell footprint at a virtual timestep $\mu$. 
+The intermittent cell footprints are then translated to their linearly interpolated positions determined form the cell movement vector $\Vec{v}$ and compounded using:
+\begin{equation}
+    \Psi^n = max\left(\left[  \frac{\mu}{\kappa} \psi_{i+\Vec{v}\frac{\mu}{\kappa}}^n  + \left(1-\frac{\mu}{\kappa}\right) \psi_{i-\Vec{v}\left(1-\frac{\mu}{\kappa}\right)}^{n+1}  \right]_{\mu\in\{\mathbb{N}\leq\kappa\}}\right),
+\end{equation}
+where $\Psi^n$ is the linearly interpolated swath at timestep $n$, $\psi_{i}^{n}$ is the cell footprint at time $n$ and position $i$ as determined by the tracking algorithm, $\kappa = {_\Delta t_{virt.}}/{_\Delta t}$ is the number of virtual timesteps per simulation output timestep. 
+Translations are performed the grid-point level, derivations of $\Vec{v}$ are rounded to the nearest integer, ignoring sub-grid-point translations. 
+$\Psi$ can be calculated for all timesteps where the cell is active, yielding the total smoothed swath area $\mathbb{S}$:
+\begin{equation}
+    \mathbb{S} = max\left(\left[\Psi^n\right]_{n\in\gamma}\right),
+\end{equation}
+where $\gamma$ contains all timesteps where the cell is active.
+The described implementation bridges the gaps left by the sparse temporal sampling of the fast moving, small hail cells, while conserving small-scale details, even in the presence complex 2D-features, like of bowed squall-lines and multiple maximas within cell extents (Fig. \ref{fig:swath_gap_filling_b}). 
+With the gap filling ($\kappa = 5$), swath areas (\SI{>20}{\mm}) are a factor two larger than the swaths reported using the original \SI{5}{\minute} timestep.

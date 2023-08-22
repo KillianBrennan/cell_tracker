@@ -21,6 +21,7 @@ Killian P. Brennan
 16.05.2023
 ---------------------------------------------------------
 """
+
 import sys
 
 import copy
@@ -44,6 +45,7 @@ from skimage.segmentation import watershed
 from skimage.segmentation import expand_labels
 from skimage.segmentation import flood
 from skimage.morphology import h_maxima
+
 
 def track_cells(
     fields,
