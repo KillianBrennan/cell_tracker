@@ -14,7 +14,7 @@ output:
 
 example use
 
-python /home/kbrennan/phd/scripts/tracking/track_climate.py /home/kbrennan/phd/data/climate/cosmo6_2017/data /home/kbrennan/phd/data/climate/cosmo6_2017/tracks 20170601 20170605
+python /home/kbrennan/cell_tracker/track_climate.py /home/kbrennan/phd/data/climate/cosmo6_2017/data /home/kbrennan/phd/data/climate/cosmo6_2017/tracks 20170725 20170725
 
 """
 import sys

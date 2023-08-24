@@ -1367,7 +1367,7 @@ def find_events(cells):
                 "is child of",
                 cell.parent,
                 "split occurred at",
-                cell.datelist[0].strftime("%m.%d %H:%M"),
+                cell.datelist[0],
             )
 
         if cell.merged_to is not None:
@@ -1377,7 +1377,7 @@ def find_events(cells):
                 "merged to",
                 cell.merged_to,
                 "merger occurred at",
-                cell.datelist[-1].strftime("%m.%d %H:%M"),
+                cell.datelist[-1],
             )
 
 
@@ -1744,7 +1744,7 @@ class Cell:
             "N",
             np.round(self.lon[0], 2),
             "E",
-            self.datelist[0].strftime("%m.%d %H:%M"),
+            self.datelist[0],
             "lasted",
             str(self.lifespan)[0:-3],
             "h",
@@ -1849,7 +1849,7 @@ class Cell:
             self.search_field.insert(0, None)
             self.search_vector.insert(0, [0, 0])
 
-    def append_associates(self, cells, field_static):
+    def append_associates(self, cells, field_static=None):
         """
         appends all associated cells to self cell
 
@@ -1857,17 +1857,22 @@ class Cell:
         cells: list of cell objects, list
         field_static: static field, dict
         """
+        cell_ids = [cell.cell_id for cell in cells]
 
         if self.parent is not None:
-            if self.parent in cells:
+            if self.parent in cell_ids:
                 self.append_cell(cells[self.parent], field_static)
 
         if self.child is not None:
             for child in self.child:
-                if child in cells:
+                if child in cell_ids:
                     self.append_cell(cells[child], field_static)
 
-    def append_cell(self, cell_to_append, field_static):
+        if self.merged_to is not None:
+            if self.merged_to in cell_ids:
+                self.append_cell(cells[self.merged_to], field_static)
+
+    def append_cell(self, cell_to_append, field_static=None):
         """
         appends cell_to_append to self cell
         used to append short lived cells to parent
@@ -1883,39 +1888,72 @@ class Cell:
 
             if nowdate in self.datelist:
                 index = self.datelist.index(nowdate)
-                self.field[index] = np.append(
-                    self.field[index], cell_to_append.field[i], axis=0
-                )
 
-                self.field[index] = np.unique(self.field[index], axis=0)
+                if self.field is not None:
+                    self.field[index] = np.append(
+                        self.field[index], cell_to_append.field[i], axis=0
+                    )
 
-                mass_center = np.mean(self.field[index], axis=0)
+                    self.field[index] = np.unique(self.field[index], axis=0)
 
-                self.mass_center_x[index] = mass_center[0]
-                self.mass_center_y[index] = mass_center[1]
+                    mass_center = np.mean(self.field[index], axis=0)
 
-                self.area_gp[index] = np.shape(self.field[index])[
-                    0
-                ]  # area in gridpoints
+                    self.mass_center_x[index] = mass_center[0]
+                    self.mass_center_y[index] = mass_center[1]
 
-                # not recalculated to save time (field to coordinate conversion):
-                # max_pos = ndimage.measurements.maximum_position(self.field[index])
-                # self.max_val[index] = np.max(self.field[index]) # maximum value of field
-                # self.max_x[index] = max_pos[0]
-                # self.max_y[index] = max_pos[1]
+                    self.area_gp[index] = np.shape(self.field[index])[
+                        0
+                    ]  # area in gridpoints
 
-                self.lon[index] = field_static["lon"][
-                    int(np.round(self.mass_center_x[index])),
-                    int(np.round(self.mass_center_y[index])),
-                ]
-                self.lat[index] = field_static["lat"][
-                    int(np.round(self.mass_center_x[index])),
-                    int(np.round(self.mass_center_y[index])),
-                ]
+                else:
+                    # weighted mean approximation
+                    self.mass_center_x[index] = cell_to_append.mass_center_x[
+                        i
+                    ] * cell_to_append.area_gp[i] / (
+                        cell_to_append.area_gp[i] + self.area_gp[index]
+                    ) + self.mass_center_x[
+                        index
+                    ] * self.area_gp[
+                        index
+                    ] / (
+                        cell_to_append.area_gp[i] + self.area_gp[index]
+                    )
+                    self.mass_center_y[index] = cell_to_append.mass_center_y[
+                        i
+                    ] * cell_to_append.area_gp[i] / (
+                        cell_to_append.area_gp[i] + self.area_gp[index]
+                    ) + self.mass_center_y[
+                        index
+                    ] * self.area_gp[
+                        index
+                    ] / (
+                        cell_to_append.area_gp[i] + self.area_gp[index]
+                    )
+
+                    # first or last timestep of cell_to_append has been added by add_split_timestep or add_merged_timestep so it doesnt need to be added.
+                    if i != 0 and i != len(cell_to_append.datelist) - 1:
+                        self.area_gp[index] += cell_to_append.area_gp[i]
+
+                if self.max_val[index] < cell_to_append.max_val[i]:
+                    self.max_val[index] = cell_to_append.max_val[i]
+                    self.max_x[index] = cell_to_append.max_x[i]
+                    self.max_y[index] = cell_to_append.max_y[i]
+
+                if field_static is not None:
+                    self.lon[index] = field_static["lon"][
+                        int(np.round(self.mass_center_x[index])),
+                        int(np.round(self.mass_center_y[index])),
+                    ]
+                    self.lat[index] = field_static["lat"][
+                        int(np.round(self.mass_center_x[index])),
+                        int(np.round(self.mass_center_y[index])),
+                    ]
 
             elif nowdate > self.datelist[-1]:
                 index = -1
-                self.field.append(cell_to_append.field[i])
+                if self.field is not None:
+                    self.field.append(cell_to_append.field[i])
+
                 self.datelist.append(nowdate)
 
                 self.mass_center_x.append(cell_to_append.mass_center_x[i])
@@ -1945,7 +1983,8 @@ class Cell:
 
             elif nowdate < self.datelist[0]:
                 index = -1
-                self.field.insert(0, cell_to_append.field[i])
+                if self.field is not None:
+                    self.field.insert(0, cell_to_append.field[i])
                 self.datelist.insert(0, nowdate)
 
                 self.mass_center_x.insert(0, cell_to_append.mass_center_x[i])
@@ -2062,6 +2101,40 @@ class Cell:
             "score": [round(float(x), 2) for x in self.score],
         }
         return cell_dict
+
+    def from_dict(self, cell_dict):
+        """
+        returns a cell object from a dictionary containing all cell object information
+
+        in
+        cell_dict: dictionary containing all cell object information, dict
+        """
+        self.cell_id = cell_dict["cell_id"]
+        self.parent = cell_dict["parent"]
+        self.child = cell_dict["child"]
+        self.merged_to = cell_dict["merged_to"]
+        self.died_of = cell_dict["died_of"]
+        self.lifespan = cell_dict["lifespan"]
+        self.datelist = [np.datetime64(t) for t in cell_dict["datelist"]]
+        self.lon = cell_dict["lon"]
+        self.lat = cell_dict["lat"]
+        self.mass_center_x = cell_dict["mass_center_x"]
+        self.mass_center_y = cell_dict["mass_center_y"]
+        self.max_x = cell_dict["max_x"]
+        self.max_y = cell_dict["max_y"]
+        self.delta_x = cell_dict["delta_x"]
+        self.delta_y = cell_dict["delta_y"]
+        self.area_gp = cell_dict["area_gp"]
+        self.max_val = cell_dict["max_val"]
+        self.score = cell_dict["score"]
+
+        self.overlap = [0] * len(self.datelist)
+        self.search_field = [None] * len(self.datelist)
+        self.search_vector = [[0, 0]] * len(self.datelist)
+        self.alive = False
+        self.field = None
+        self.label = []
+        self.swath = []
 
 
 def write_to_json(cellss, filename):
@@ -2223,6 +2296,44 @@ def write_masks_to_netcdf(
     # os.system("nczip " + filename)
 
     return ds
+
+
+def read_from_json(filename):
+    """
+    reads cell objects from json file
+    """
+
+    with open(filename, "r") as f:
+        struct = json.load(f)
+
+    if (
+        struct["data_structure"]
+        == "cell_data contains list of cells, each cell contains a a dictionary of cell parameters which are lists with length of the lifetime of the cell"
+    ):
+        cellss = []
+        for cell_dict in struct["cell_data"]:
+            cell = Cell(None, None, None)
+            cell.from_dict(cell_dict)
+            cellss.append(cell)
+
+    elif (
+        struct["data_structure"]
+        == "cell_data contains list of ensemle members, each of which is a list of cells, each cell contains a a dictionary of cell parameters which are lists with length of the lifetime of the cell"
+    ):
+        cellss = []
+        for member in struct["cell_data"]:
+            cells = []
+            for cell_dict in member:
+                cell = Cell(None, None, None)
+                cell.from_dict(cell_dict)
+                cells.append(cell)
+            cellss.append(cells)
+
+    else:
+        print("unknown data structure")
+        return []
+
+    return cellss
 
 
 if __name__ == "__main__":
