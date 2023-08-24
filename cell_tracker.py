@@ -1533,7 +1533,7 @@ class Cell:
 
         self.died_of = None
 
-        self.field = []
+        self.field = [] # list of coordinates that are inside the cell mask
 
         self.swath = None
 
@@ -1555,7 +1555,7 @@ class Cell:
 
         in
         field_static: static field, dict
-        coordinates: coordinates of cell, array
+        coordinates: coordinates that lie within cell, array
         values: values of cell, array
         """
         self.field.append(coordinates)
@@ -2297,10 +2297,10 @@ def write_masks_to_netcdf(
 
     return ds
 
-
 def read_from_json(filename):
     """
     reads cell objects from json file
+    this is only a post processing function, not used in tracking
     """
 
     with open(filename, "r") as f:
@@ -2329,11 +2329,22 @@ def read_from_json(filename):
                 cells.append(cell)
             cellss.append(cells)
 
-    else:
-        print("unknown data structure")
+    elif struct["data_structure"] == "no cells found":
         return []
+    
+    else:
+        print("data structure not recognized")
+        return
 
     return cellss
+
+def add_masks(cells, filename):
+    '''
+    adds masks to cell objects from netcdf file
+    this is only a post processing function, not used in tracking
+    todo: this needs to be implemented
+    '''
+    return
 
 
 if __name__ == "__main__":
