@@ -1941,8 +1941,6 @@ class Cell:
                     self.area_gp[index] = np.shape(self.field[index])[
                         0
                     ]  # area in gridpoints
-                    self.width_gp[index] = np.shape(self.field[index])[0]
-                    self.length_gp[index] = np.shape(self.field[index])[0]
 
                 else:
                     # weighted mean approximation
