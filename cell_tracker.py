@@ -1590,7 +1590,7 @@ class Cell:
             # get width and length relative to movement vector
             # rotate the cell mask 
             angle = np.arctan2(self.delta_y[-1], self.delta_x[-1]) * 180 / np.pi
-            
+
             mask_size = np.max(coordinates, axis=0)-np.min(coordinates, axis=0)+1
 
             mask = np.zeros(mask_size)
@@ -1602,9 +1602,8 @@ class Cell:
             cell_mask_r[cell_mask_r<0.5] = 0
             cell_mask_r[cell_mask_r>0.5] = 1
 
-
-            width_gp = np.max(np.argmax(cell_mask_r, axis=1))-np.min(np.argmin(cell_mask_r, axis=1))
-            length_gp = np.max(np.argmax(cell_mask_r, axis=0))-np.min(np.argmin(cell_mask_r, axis=0))
+            width_gp = np.where(cell_mask_r)[1].max()-np.where(cell_mask_r)[1].min()
+            length_gp = np.where(cell_mask_r)[0].max()-np.where(cell_mask_r)[0].min()
 
             self.width_gp.append(width_gp)
             self.length_gp.append(length_gp)
