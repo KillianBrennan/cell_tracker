@@ -36,6 +36,8 @@ import xarray as xr
 
 from scipy import ndimage
 from scipy import interpolate
+from scipy.ndimage import rotate
+
 
 import itertools
 import collections
@@ -1522,7 +1524,9 @@ class Cell:
         self.lon = []
         self.lat = []
 
-        self.area_gp = []
+        self.area_gp = [] # area in gridpoints
+        self.width_gp = [] # width of cell footprint in gridpoints
+        self.length_gp = [] # length of cell footprint in gridpoints
         self.max_val = []
         self.max_x = []
         self.max_y = []
@@ -1576,9 +1580,34 @@ class Cell:
         if len(self.mass_center_x) < 2:
             self.delta_x.append(0)
             self.delta_y.append(0)
+
+            self.width_gp.append(0)
+            self.length_gp.append(0)
         else:
             self.delta_x.append(self.mass_center_x[-1] - self.mass_center_x[-2])
             self.delta_y.append(self.mass_center_y[-1] - self.mass_center_y[-2])
+
+            # get width and length relative to movement vector
+            # rotate the cell mask 
+            angle = np.arctan2(self.delta_y[-1], self.delta_x[-1]) * 180 / np.pi
+            
+            mask_size = np.max(coordinates, axis=0)-np.min(coordinates, axis=0)+1
+
+            mask = np.zeros(mask_size)
+            mask[coordinates[:,0]-np.min(coordinates, axis=0)[0], coordinates[:,1]-np.min(coordinates, axis=0)[1]] = 1
+
+            cell_mask_r = rotate(mask, angle)
+
+            # threshold the rotated cell mask
+            cell_mask_r[cell_mask_r<0.5] = 0
+            cell_mask_r[cell_mask_r>0.5] = 1
+
+
+            width_gp = np.max(np.argmax(cell_mask_r, axis=1))-np.min(np.argmin(cell_mask_r, axis=1))
+            length_gp = np.max(np.argmax(cell_mask_r, axis=0))-np.min(np.argmin(cell_mask_r, axis=0))
+
+            self.width_gp.append(width_gp)
+            self.length_gp.append(length_gp)
 
         # self.area_gp.append(np.count_nonzero(masked)) # area in gridpoints
         self.max_val.append(np.max(values))  # maximum value of field
