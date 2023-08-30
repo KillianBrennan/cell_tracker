@@ -1525,8 +1525,8 @@ class Cell:
         self.lat = []
 
         self.area_gp = []  # area in gridpoints
-        self.width_gp = []  # width of cell footprint in gridpoints
-        self.length_gp = []  # length of cell footprint in gridpoints
+        # self.width_gp = []  # width of cell footprint in gridpoints
+        # self.length_gp = []  # length of cell footprint in gridpoints
         self.max_val = []
         self.max_x = []
         self.max_y = []
@@ -1581,8 +1581,8 @@ class Cell:
             self.delta_x.append(0)
             self.delta_y.append(0)
 
-            self.width_gp.append(0)
-            self.length_gp.append(0)
+            # self.width_gp.append(0)
+            # self.length_gp.append(0)
         else:
             self.delta_x.append(self.mass_center_x[-1] - self.mass_center_x[-2])
             self.delta_y.append(self.mass_center_y[-1] - self.mass_center_y[-2])
@@ -1605,11 +1605,11 @@ class Cell:
             cell_mask_r[cell_mask_r < 0.5] = 0
             cell_mask_r[cell_mask_r > 0.5] = 1
 
-            width_gp = np.where(cell_mask_r)[1].max() - np.where(cell_mask_r)[1].min()
-            length_gp = np.where(cell_mask_r)[0].max() - np.where(cell_mask_r)[0].min()
+            # width_gp = np.where(cell_mask_r)[1].max() - np.where(cell_mask_r)[1].min()
+            # length_gp = np.where(cell_mask_r)[0].max() - np.where(cell_mask_r)[0].min()
 
-            self.width_gp.append(width_gp)
-            self.length_gp.append(length_gp)
+            # self.width_gp.append(width_gp)
+            # self.length_gp.append(length_gp)
 
         # self.area_gp.append(np.count_nonzero(masked)) # area in gridpoints
         self.max_val.append(np.max(values))  # maximum value of field
@@ -1689,8 +1689,8 @@ class Cell:
         self.lat.insert(0, parent.lat[split_idx])
 
         self.area_gp.insert(0, parent.area_gp[split_idx])
-        self.width_gp.insert(0, parent.width_gp[split_idx])
-        self.length_gp.insert(0, parent.length_gp[split_idx])
+        # self.width_gp.insert(0, parent.width_gp[split_idx])
+        # self.length_gp.insert(0, parent.length_gp[split_idx])
         self.max_val.insert(0, parent.max_val[split_idx])
         self.max_x.insert(0, parent.max_x[split_idx])
         self.max_y.insert(0, parent.max_y[split_idx])
@@ -1738,8 +1738,8 @@ class Cell:
         self.lat.append(parent.lat[merge_idx])
 
         self.area_gp.append(parent.area_gp[merge_idx])
-        self.width_gp.append(parent.width_gp[merge_idx])
-        self.length_gp.append(parent.length_gp[merge_idx])
+        # self.width_gp.append(parent.width_gp[merge_idx])
+        # self.length_gp.append(parent.length_gp[merge_idx])
         self.max_val.append(parent.max_val[merge_idx])
         self.max_x.append(parent.max_x[merge_idx])
         self.max_y.append(parent.max_y[merge_idx])
@@ -1874,8 +1874,8 @@ class Cell:
             )
 
             self.area_gp.insert(0, self.area_gp[0])
-            self.width_gp.insert(0, self.width_gp[0])
-            self.length_gp.insert(0, self.length_gp[0])
+            # self.width_gp.insert(0, self.width_gp[0])
+            # self.length_gp.insert(0, self.length_gp[0])
 
             self.label.insert(0, None)
             self.max_val.insert(0, None)
@@ -2003,8 +2003,8 @@ class Cell:
 
                 # area in gridpoints
                 self.area_gp.append(cell_to_append.area_gp[i])
-                self.width_gp.append(cell_to_append.width_gp[i])
-                self.length_gp.append(cell_to_append.length_gp[i])
+                # self.width_gp.append(cell_to_append.width_gp[i])
+                # self.length_gp.append(cell_to_append.length_gp[i])
                 # maximum value of field
                 self.max_val.append(cell_to_append.max_val[i])
 
@@ -2036,8 +2036,8 @@ class Cell:
 
                 # area in gridpoints
                 self.area_gp.insert(0, cell_to_append.area_gp[i])
-                self.width_gp.insert(0, cell_to_append.width_gp[i])
-                self.length_gp.insert(0, cell_to_append.length_gp[i])
+                # self.width_gp.insert(0, cell_to_append.width_gp[i])
+                # self.length_gp.insert(0, cell_to_append.length_gp[i])
                 self.max_val.insert(
                     0, cell_to_append.max_val[i]
                 )  # maximum value of field
@@ -2140,8 +2140,8 @@ class Cell:
             "delta_x": [round(float(x), 2) for x in self.delta_x],
             "delta_y": [round(float(x), 2) for x in self.delta_y],
             "area_gp": [int(x) for x in self.area_gp],
-            "width_gp": [int(x) for x in self.width_gp],
-            "length_gp": [int(x) for x in self.length_gp],
+            # "width_gp": [int(x) for x in self.width_gp],
+            # "length_gp": [int(x) for x in self.length_gp],
             "max_val": [round(float(x), 2) for x in self.max_val],
             "score": [round(float(x), 2) for x in self.score],
         }
@@ -2170,8 +2170,8 @@ class Cell:
         self.delta_x = cell_dict["delta_x"]
         self.delta_y = cell_dict["delta_y"]
         self.area_gp = cell_dict["area_gp"]
-        self.width_gp = cell_dict["width_gp"]
-        self.length_gp = cell_dict["length_gp"]
+        # self.width_gp = cell_dict["width_gp"]
+        # self.length_gp = cell_dict["length_gp"]
         self.max_val = cell_dict["max_val"]
         self.score = cell_dict["score"]
 
@@ -2237,8 +2237,8 @@ def write_to_json(cellss, filename):
             "delta_x": "list of delta x for each timestep in cell lifetime",
             "delta_y": "list of delta y for each timestep in cell lifetime",
             "area_gp": "list of area in gridpoints for each timestep in cell lifetime",
-            "width_gp": "list of width (relative to cell movement vector) in gridpoints for each timestep in cell lifetime",
-            "length_gp": "list of length (relative to cell movement vector) in gridpoints for each timestep in cell lifetime",
+            # "width_gp": "list of width (relative to cell movement vector) in gridpoints for each timestep in cell lifetime",
+            # "length_gp": "list of length (relative to cell movement vector) in gridpoints for each timestep in cell lifetime",
             "max_val": "list of max value for each timestep in cell lifetime",
             "score": "list of tracking score for each timestep in cell lifetime, -1 is nan",
         },
