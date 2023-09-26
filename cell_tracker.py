@@ -2339,7 +2339,8 @@ def write_masks_to_netcdf(
     )
 
     # write to netcdf file
-    ds.to_netcdf(filename)
+    # ds.to_netcdf(filename)
+    ds.to_netcdf(filename,encoding={'cell_mask': {'zlib': True, 'complevel': 9}})
 
     # compress netcdf file
     # os.system("nczip " + filename)
