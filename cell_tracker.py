@@ -25,7 +25,6 @@ Killian P. Brennan
 import sys
 
 import copy
-import os
 
 import json
 
@@ -109,7 +108,7 @@ def track_cells(
     for i, field in enumerate(fields_tqdm):
         nowdate = datelist[i]
 
-        labeled, above_threshold = label_local_maximas(
+        labeled = label_local_maximas(
             field,
             prominence,
             threshold,
@@ -239,14 +238,9 @@ def fill_gaps(cells, fields, datelist):
                 if (index > 0) & (last_field is not None):
                     cell_coordinates = cell.field[index]
                     cell_values = field[cell_coordinates[:, 0], cell_coordinates[:, 1]]
-                    cell_center = [cell.mass_center_x[index], cell.mass_center_y[index]]
                     last_cell_coordinates = cell.field[index - 1]
                     last_cell_values = last_field[
                         last_cell_coordinates[:, 0], last_cell_coordinates[:, 1]
-                    ]
-                    last_cell_center = [
-                        cell.mass_center_x[index - 1],
-                        cell.mass_center_y[index - 1],
                     ]
 
                     delta_x = cell.delta_x[index]
@@ -407,7 +401,7 @@ def label_local_maximas(field, prominence, threshold, min_distance, fill_method,
     # dilate labels
     labeled = expand_labels(labeled, distance=aura)
 
-    return labeled, above_threshold
+    return labeled
 
 
 def advect_array(flow_field, array, new_delta_x, new_delta_y):
@@ -1016,9 +1010,7 @@ def permutate_cluster(ids, candidates):
 
     # should never be reached, since it is handeled by cluster_size_limit & reduce_cluster_size
     if len(ids) > 16:
-        print(
-            f"large number of permutations: {len(permutations)}, from {len(ids)} ids"
-        )
+        print(f"large number of permutations: {len(permutations)}, from {len(ids)} ids")
         pass
     if len(ids) > 20:
         # reaching this would still break the tracking, especially in parallel processing
@@ -1389,6 +1381,7 @@ def interpolate_footprints(
         ] += (last_cell_values * last_weight)
         array = np.max(np.dstack((array, blend)), 2)
     return array, min_coords, max_coords
+
 
 class Cell:
     """
@@ -1814,7 +1807,6 @@ class Cell:
                     if i != 0 and i != len(cell_to_append.datelist) - 1:
                         self.area_gp[index] += cell_to_append.area_gp[i]
 
-
                 if self.max_val[index] < cell_to_append.max_val[i]:
                     self.max_val[index] = cell_to_append.max_val[i]
                     self.max_x[index] = cell_to_append.max_x[i]
@@ -1896,11 +1888,11 @@ class Cell:
 
             else:
                 print("other appending error")
-        
+
         # recalculate delta_x/y from new mass centers
         for i in range(1, len(self.datelist)):
-            self.delta_x[i] = self.mass_center_x[i] - self.mass_center_x[i-1]
-            self.delta_y[i] = self.mass_center_y[i] - self.mass_center_y[i-1]
+            self.delta_x[i] = self.mass_center_x[i] - self.mass_center_x[i - 1]
+            self.delta_y[i] = self.mass_center_y[i] - self.mass_center_y[i - 1]
 
     def copy(self):
         """
@@ -1971,40 +1963,6 @@ class Cell:
             "score": [round(float(x), 2) for x in self.score],
         }
         return cell_dict
-
-    def from_dict(self, cell_dict):
-        """
-        returns a cell object from a dictionary containing all cell object information
-
-        in
-        cell_dict: dictionary containing all cell object information, dict
-        """
-        self.cell_id = cell_dict["cell_id"]
-        self.parent = cell_dict["parent"]
-        self.child = cell_dict["child"]
-        self.merged_to = cell_dict["merged_to"]
-        self.died_of = cell_dict["died_of"]
-        self.lifespan = cell_dict["lifespan"]
-        self.datelist = [np.datetime64(t) for t in cell_dict["datelist"]]
-        self.lon = cell_dict["lon"]
-        self.lat = cell_dict["lat"]
-        self.mass_center_x = cell_dict["mass_center_x"]
-        self.mass_center_y = cell_dict["mass_center_y"]
-        self.max_x = cell_dict["max_x"]
-        self.max_y = cell_dict["max_y"]
-        self.delta_x = cell_dict["delta_x"]
-        self.delta_y = cell_dict["delta_y"]
-        self.area_gp = cell_dict["area_gp"]
-        self.max_val = cell_dict["max_val"]
-        self.score = cell_dict["score"]
-
-        self.overlap = [0] * len(self.datelist)
-        self.search_field = [None] * len(self.datelist)
-        self.search_vector = [[0, 0]] * len(self.datelist)
-        self.alive = False
-        self.field = None
-        self.label = []
-        self.swath = []
 
 
 def write_to_json(cellss, filename):
@@ -2160,51 +2118,9 @@ def write_masks_to_netcdf(
     )
 
     # write to netcdf file
-    ds.to_netcdf(filename,encoding={'cell_mask': {'zlib': True, 'complevel': 9}})
+    ds.to_netcdf(filename, encoding={"cell_mask": {"zlib": True, "complevel": 9}})
 
     return ds
-
-
-def read_from_json(filename):
-    """
-    reads cell objects from json file
-    this is only a post processing function, not used in tracking
-    """
-
-    with open(filename, "r") as f:
-        struct = json.load(f)
-
-    if (
-        struct["data_structure"]
-        == "cell_data contains list of cells, each cell contains a a dictionary of cell parameters which are lists with length of the lifetime of the cell"
-    ):
-        cellss = []
-        for cell_dict in struct["cell_data"]:
-            cell = Cell(None, None, None)
-            cell.from_dict(cell_dict)
-            cellss.append(cell)
-
-    elif (
-        struct["data_structure"]
-        == "cell_data contains list of ensemle members, each of which is a list of cells, each cell contains a a dictionary of cell parameters which are lists with length of the lifetime of the cell"
-    ):
-        cellss = []
-        for member in struct["cell_data"]:
-            cells = []
-            for cell_dict in member:
-                cell = Cell(None, None, None)
-                cell.from_dict(cell_dict)
-                cells.append(cell)
-            cellss.append(cells)
-
-    elif struct["data_structure"] == "no cells found":
-        return []
-
-    else:
-        print("data structure not recognized")
-        return
-
-    return cellss
 
 
 if __name__ == "__main__":
