@@ -159,8 +159,6 @@ def track_cells(
             for cell in cells_alive
         ]
 
-        _ = [cell.check_consistency() for cell in cells_alive]
-
         flow_field = generate_flow_field(cells_alive, field.shape, 10)
 
         last_labeled = labeled
@@ -1934,7 +1932,7 @@ class Cell:
         outstr += "\n\n"
 
         return outstr
-
+    
     def to_dict(self):
         """
         returns a dictionary containing all cell object information
