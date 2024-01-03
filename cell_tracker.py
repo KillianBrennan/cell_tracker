@@ -6,16 +6,11 @@
 finds cells and tracks them
 ---------------------------------------------------------
 IN
-xarray dataset with one ensemble member
-tracking parameters (thresholds)
+2d * time dataset with one ensemble member
+tracking parameters
 ---------------------------------------------------------
 OUT
-xarray dataset with tracks
----------------------------------------------------------
-EXAMPLE CALLS
----------------------------------------------------------
-TODOS
-
+tracked cells
 ---------------------------------------------------------
 Killian P. Brennan
 16.05.2023
@@ -23,24 +18,17 @@ Killian P. Brennan
 """
 
 import sys
-
 import copy
+import itertools
+import collections
 
 import json
-
 import numpy as np
-import math
 from tqdm import tqdm
 import xarray as xr
 
 from scipy import ndimage
 from scipy import interpolate
-from scipy.ndimage import rotate
-
-
-import itertools
-import collections
-
 from skimage.feature import peak_local_max
 from skimage.segmentation import watershed
 from skimage.segmentation import expand_labels
@@ -299,7 +287,7 @@ def generate_flow_field(cells, grid_shape, subsampling=1):
     y_pos = []
     u_vel = []
     v_vel = []
-    grid_shape = tuple(math.ceil(dim / subsampling) for dim in grid_shape)
+    grid_shape = tuple(np.ceil(dim / subsampling).astype(int) for dim in grid_shape)
 
     for cell in cells:
         if len(cell.datelist) > 3:
@@ -973,7 +961,7 @@ def reduce_cluster_size(
         print("warning: original candidates not in new candidates")
         print(orig_candidates)
         print(new_candidates)
-        exit()
+        sys.exit()
 
     return (
         ids,
@@ -1009,7 +997,6 @@ def permutate_cluster(ids, candidates):
     # should never be reached, since it is handeled by cluster_size_limit & reduce_cluster_size
     if len(ids) > 16:
         print(f"large number of permutations: {len(permutations)}, from {len(ids)} ids")
-        pass
     if len(ids) > 20:
         # reaching this would still break the tracking, especially in parallel processing
         sys.exit(f"too many permutations: {len(permutations)}")
@@ -1104,8 +1091,6 @@ def find_overlaps(
             last_active = advect_array(
                 flow_field, last_active, new_delta_x, new_delta_y
             )
-        elif advection_method == "none":
-            last_active = last_active
 
         laa = np.count_nonzero(last_active)
 
@@ -1180,7 +1165,6 @@ def calculate_score(
     score: score of correspondence, float
     """
     # adapted from diss ruedishueli
-    alpha = alpha
     a_p = last_active_area[0]
     a_c = np.sum(area_gp)
     a_o = np.sum(overlap)
@@ -1802,7 +1786,7 @@ class Cell:
                     )
 
                     # first or last timestep of cell_to_append has been added by add_split_timestep or add_merged_timestep so it doesnt need to be added.
-                    if i != 0 and i != len(cell_to_append.datelist) - 1:
+                    if i not in (0,len(cell_to_append.datelist) - 1):
                         self.area_gp[index] += cell_to_append.area_gp[i]
 
                 if self.max_val[index] < cell_to_append.max_val[i]:
@@ -1932,7 +1916,7 @@ class Cell:
         outstr += "\n\n"
 
         return outstr
-    
+
     def to_dict(self):
         """
         returns a dictionary containing all cell object information
@@ -1993,7 +1977,7 @@ def write_to_json(cellss, filename):
         print(
             "input is neither list of cells nor list of list of cells, each cell contains a a dictionary of cell parameters which ar lists with length of the lifetime of the cell"
         )
-        return
+        return None
 
     struct = {
         "info": "cell track data generated using track_cells_v2.py",
@@ -2063,7 +2047,7 @@ def write_masks_to_netcdf(
 
     else:
         print("input is neither list of cells nor list of list of cells")
-        return
+        return None
 
     mask_array = np.zeros(
         (
