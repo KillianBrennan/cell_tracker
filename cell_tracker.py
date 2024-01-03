@@ -46,7 +46,7 @@ from skimage.feature import peak_local_max
 from skimage.segmentation import watershed
 from skimage.segmentation import expand_labels
 from skimage.segmentation import flood
-from skimage.morphology import h_maxima
+from skimage.morphology import h_maxima, disk
 
 
 def track_cells(
@@ -64,7 +64,7 @@ def track_cells(
     alpha=0.5,
     velocity_score_weight=0.5,
     min_lifespan=30,
-    aura=0,
+    aura=5,
     quiet=True,
     cluster_size_limit=16,
 ):
@@ -97,10 +97,8 @@ def track_cells(
     cells_dead = []  # list of deceased cell objects
     cells = []  # list of final cell objects
     cell_id = 0  # initial unique cell id
-    last_above_threshold = None
     last_labeled = []
     flow_field = None
-    prev_field = None
 
     # tracking loop
     if not quiet:
@@ -120,16 +118,12 @@ def track_cells(
             aura,
         )
 
-        if prev_field is None:
-            prev_field = field
-
         # assign lables at current timestep from areas overlapping to last timestep
         cells_alive, labels, cell_id = assign_new_labels(
             cells_alive,
             labeled,
             last_labeled,
             field,
-            prev_field,
             cell_id,
             nowdate,
             flow_field,
@@ -157,12 +151,6 @@ def track_cells(
                 cells_dead.append(cell)
         cells_alive = [cell for cell in cells_alive if cell.alive]
 
-        # todo: check should not be needed if code worked, can be deleted
-        for cell in cells_alive:
-            if not cell.alive:
-                print("error: dead cell in alive list")
-                sys.exit()
-
         # do math with all alive cells at timestep
         _ = [
             cell.cal_spatial(
@@ -178,7 +166,6 @@ def track_cells(
         flow_field = generate_flow_field(cells_alive, field.shape, 10)
 
         last_labeled = labeled
-        last_above_threshold = above_threshold
 
     # post processing
     cells = cells_alive + cells_dead
@@ -210,7 +197,7 @@ def track_cells(
     cells = remap_ids(cells)
 
     for cell in cells:
-        if cell.parent:
+        if cell.parent is not None:
             cell.insert_split_timestep(cells[cell.parent])
         if cell.merged_to is not None:
             cell.insert_merged_timestep(cells[cell.merged_to])
@@ -433,8 +420,6 @@ def label_local_maximas(field, prominence, threshold, min_distance, fill_method,
 def advect_array(flow_field, array, new_delta_x, new_delta_y):
     """
     advects cell labels according to movement vector
-    todo: get rid of roll-over
-    todo: change to simple addition of velocity*dt to cell coordinates
 
     in
     flow_field: estimated flow field, array
@@ -457,11 +442,11 @@ def advect_array(flow_field, array, new_delta_x, new_delta_y):
                 coordinates = np.argwhere(array)
                 center = np.mean(coordinates, axis=0)
                 center = [int(round(x / 10)) for x in center]
-                new_delta_x = flow_field[center[0], center[1], 0]
-                new_delta_y = flow_field[center[0], center[1], 1]
+                new_delta_x = flow_field[center[0], center[1], 1]
+                new_delta_y = flow_field[center[0], center[1], 0]
 
-    array = np.roll(array, int(round(new_delta_x)), axis=0)
-    array = np.roll(array, int(round(new_delta_y)), axis=1)
+    array = np.roll(array, int(round(new_delta_x)), axis=1)
+    array = np.roll(array, int(round(new_delta_y)), axis=0)
 
     return array
 
@@ -510,7 +495,6 @@ def assign_new_labels(
     labeled,
     last_labeled,
     field,
-    prev_field,
     cell_id,
     nowdate,
     flow_field,
@@ -530,7 +514,6 @@ def assign_new_labels(
     labeled: labeled cell areas, array
     last_labeled: last labeled cell areas, array
     field: 2d meteorological field, array
-    prev_field: previous 2d meteorological field, array
     cell_id: last used cell identifier, int
     nowdate: current datetime being investigated, datetime
     flow_field: estimate of flow field, array
@@ -570,8 +553,6 @@ def assign_new_labels(
         cells,
         labeled,
         last_labeled,
-        field,
-        prev_field,
         flow_field,
         advection_method,
         dynamic_tracking,
@@ -1088,12 +1069,12 @@ def permutate_cluster(ids, candidates):
 
     # should never be reached, since it is handeled by cluster_size_limit & reduce_cluster_size
     if len(ids) > 16:
-        # logging.warning(
-        #     f"large number of permutations: {len(permutations)}, from {len(ids)} ids"
-        # )
+        print(
+            f"large number of permutations: {len(permutations)}, from {len(ids)} ids"
+        )
         pass
     if len(ids) > 20:
-        # todo: reaching this would still break the tracking, especially in parallel processing
+        # reaching this would still break the tracking, especially in parallel processing
         sys.exit(f"too many permutations: {len(permutations)}")
 
     return permutations
@@ -1134,8 +1115,6 @@ def find_overlaps(
     cells,
     labeled,
     last_labeled,
-    field,
-    prev_field,
     flow_field,
     advection_method,
     dynamic_tracking,
@@ -1149,8 +1128,6 @@ def find_overlaps(
     cells: list of cell objects, list
     labeled: labeled cell areas, array
     last_labeled: last labeled cell areas, array
-    field: 2d meteorological field, array
-    prev_field: previous 2d meteorological field, array
     flow_field: estimate of flow field, array
     advection_method: method used to advect cells, string
     dynamic_tracking: number of timesteps used for advecting search mask, int
@@ -1222,7 +1199,7 @@ def find_overlaps(
             counts.extend(area_gp)
             overlap.extend(ovl)
             last_active_area.extend(laas)
-            last_velocity.extend(lvel)  # todo
+            last_velocity.extend(lvel)
             last_center.extend(lcent)
 
         else:
@@ -1471,25 +1448,6 @@ def interpolate_footprints(
         array = np.max(np.dstack((array, blend)), 2)
     return array, min_coords, max_coords
 
-
-def make_aura_kernel(radius: int):
-    """
-    returns 2d binary structure with radius
-
-    in
-    radius: radius of structure, int
-
-    out
-    kernel: 2d binary structure with radius, array
-    """
-    kernel = np.zeros((2 * radius + 1, 2 * radius + 1))
-    for i in range(2 * radius + 1):
-        for j in range(2 * radius + 1):
-            if np.sqrt((i - radius) ** 2 + (j - radius) ** 2) <= radius:
-                kernel[i, j] = 1
-    return kernel
-
-
 class Cell:
     """
     cell class with atributes for each cell
@@ -1525,8 +1483,6 @@ class Cell:
         self.lat = []
 
         self.area_gp = []  # area in gridpoints
-        # self.width_gp = []  # width of cell footprint in gridpoints
-        # self.length_gp = []  # length of cell footprint in gridpoints
         self.max_val = []
         self.max_x = []
         self.max_y = []
@@ -1581,35 +1537,9 @@ class Cell:
             self.delta_x.append(0)
             self.delta_y.append(0)
 
-            # self.width_gp.append(0)
-            # self.length_gp.append(0)
         else:
             self.delta_x.append(self.mass_center_x[-1] - self.mass_center_x[-2])
             self.delta_y.append(self.mass_center_y[-1] - self.mass_center_y[-2])
-
-            # get width and length relative to movement vector
-            # rotate the cell mask
-            angle = np.arctan2(self.delta_y[-1], self.delta_x[-1]) * 180 / np.pi
-
-            mask_size = np.max(coordinates, axis=0) - np.min(coordinates, axis=0) + 1
-
-            mask = np.zeros(mask_size)
-            mask[
-                coordinates[:, 0] - np.min(coordinates, axis=0)[0],
-                coordinates[:, 1] - np.min(coordinates, axis=0)[1],
-            ] = 1
-
-            cell_mask_r = rotate(mask, angle)
-
-            # threshold the rotated cell mask
-            cell_mask_r[cell_mask_r < 0.5] = 0
-            cell_mask_r[cell_mask_r > 0.5] = 1
-
-            # width_gp = np.where(cell_mask_r)[1].max() - np.where(cell_mask_r)[1].min()
-            # length_gp = np.where(cell_mask_r)[0].max() - np.where(cell_mask_r)[0].min()
-
-            # self.width_gp.append(width_gp)
-            # self.length_gp.append(length_gp)
 
         # self.area_gp.append(np.count_nonzero(masked)) # area in gridpoints
         self.max_val.append(np.max(values))  # maximum value of field
@@ -1689,8 +1619,6 @@ class Cell:
         self.lat.insert(0, parent.lat[split_idx])
 
         self.area_gp.insert(0, parent.area_gp[split_idx])
-        # self.width_gp.insert(0, parent.width_gp[split_idx])
-        # self.length_gp.insert(0, parent.length_gp[split_idx])
         self.max_val.insert(0, parent.max_val[split_idx])
         self.max_x.insert(0, parent.max_x[split_idx])
         self.max_y.insert(0, parent.max_y[split_idx])
@@ -1723,8 +1651,8 @@ class Cell:
             # )
             return
 
-        merge_idx = parent.datelist.index(self.datelist[-1])  # + 1 # todo
-        self.label.append(parent.label[merge_idx])  # todo
+        merge_idx = parent.datelist.index(self.datelist[-1]) + 1
+        self.label.append(parent.label[merge_idx])
 
         self.datelist.append(parent.datelist[merge_idx])
 
@@ -1738,8 +1666,6 @@ class Cell:
         self.lat.append(parent.lat[merge_idx])
 
         self.area_gp.append(parent.area_gp[merge_idx])
-        # self.width_gp.append(parent.width_gp[merge_idx])
-        # self.length_gp.append(parent.length_gp[merge_idx])
         self.max_val.append(parent.max_val[merge_idx])
         self.max_x.append(parent.max_x[merge_idx])
         self.max_y.append(parent.max_y[merge_idx])
@@ -1811,7 +1737,7 @@ class Cell:
         if kernel_size == 0:
             return
 
-        kernel = make_aura_kernel(kernel_size)
+        kernel = disk(kernel_size)
 
         for i, field in enumerate(self.field):
             array = np.zeros_like(field_static["lat"])
@@ -1874,8 +1800,6 @@ class Cell:
             )
 
             self.area_gp.insert(0, self.area_gp[0])
-            # self.width_gp.insert(0, self.width_gp[0])
-            # self.length_gp.insert(0, self.length_gp[0])
 
             self.label.insert(0, None)
             self.max_val.insert(0, None)
@@ -1913,13 +1837,12 @@ class Cell:
         """
         appends cell_to_append to self cell
         used to append short lived cells to parent
-        todo: delta_x/y not recalculated
 
         in
         cell_to_append: cell to append, Cell
         field_static: static field, dict
         """
-
+        idx = 0
         for i, nowdate in enumerate(cell_to_append.datelist):
             # both cells exist simultaneously
 
@@ -1971,7 +1894,6 @@ class Cell:
                     if i != 0 and i != len(cell_to_append.datelist) - 1:
                         self.area_gp[index] += cell_to_append.area_gp[i]
 
-                    # todo: update width and length
 
                 if self.max_val[index] < cell_to_append.max_val[i]:
                     self.max_val[index] = cell_to_append.max_val[i]
@@ -2003,8 +1925,6 @@ class Cell:
 
                 # area in gridpoints
                 self.area_gp.append(cell_to_append.area_gp[i])
-                # self.width_gp.append(cell_to_append.width_gp[i])
-                # self.length_gp.append(cell_to_append.length_gp[i])
                 # maximum value of field
                 self.max_val.append(cell_to_append.max_val[i])
 
@@ -2023,41 +1943,44 @@ class Cell:
                 self.lifespan = self.datelist[-1] - self.datelist[0]
 
             elif nowdate < self.datelist[0]:
-                index = -1
                 if self.field is not None:
-                    self.field.insert(0, cell_to_append.field[i])
-                self.datelist.insert(0, nowdate)
+                    self.field.insert(idx, cell_to_append.field[i])
+                self.datelist.insert(idx, nowdate)
 
-                self.mass_center_x.insert(0, cell_to_append.mass_center_x[i])
-                self.mass_center_y.insert(0, cell_to_append.mass_center_y[i])
+                self.mass_center_x.insert(idx, cell_to_append.mass_center_x[i])
+                self.mass_center_y.insert(idx, cell_to_append.mass_center_y[i])
 
-                self.delta_x.insert(0, cell_to_append.delta_x[i])
-                self.delta_y.insert(0, cell_to_append.delta_y[i])
+                self.delta_x.insert(idx, cell_to_append.delta_x[i])
+                self.delta_y.insert(idx, cell_to_append.delta_y[i])
 
                 # area in gridpoints
-                self.area_gp.insert(0, cell_to_append.area_gp[i])
-                # self.width_gp.insert(0, cell_to_append.width_gp[i])
-                # self.length_gp.insert(0, cell_to_append.length_gp[i])
+                self.area_gp.insert(idx, cell_to_append.area_gp[i])
                 self.max_val.insert(
                     0, cell_to_append.max_val[i]
                 )  # maximum value of field
 
-                self.max_x.insert(0, cell_to_append.max_x[i])
-                self.max_y.insert(0, cell_to_append.max_y[i])
+                self.max_x.insert(idx, cell_to_append.max_x[i])
+                self.max_y.insert(idx, cell_to_append.max_y[i])
 
-                self.lon.insert(0, cell_to_append.lon[i])
-                self.lat.insert(0, cell_to_append.lat[i])
+                self.lon.insert(idx, cell_to_append.lon[i])
+                self.lat.insert(idx, cell_to_append.lat[i])
 
-                self.label.insert(0, -1)  # nan representation
-                self.score.insert(0, -1)  # nan representation
-                self.overlap.insert(0, -1)  # nan representation
-                self.search_field.insert(0, None)
-                self.search_vector.insert(0, None)
+                self.label.insert(idx, -1)  # nan representation
+                self.score.insert(idx, -1)  # nan representation
+                self.overlap.insert(idx, -1)  # nan representation
+                self.search_field.insert(idx, None)
+                self.search_vector.insert(idx, None)
 
                 self.lifespan = self.datelist[-1] - self.datelist[0]
+                idx += 1
 
             else:
                 print("other appending error")
+        
+        # recalculate delta_x/y from new mass centers
+        for i in range(1, len(self.datelist)):
+            self.delta_x[i] = self.mass_center_x[i] - self.mass_center_x[i-1]
+            self.delta_y[i] = self.mass_center_y[i] - self.mass_center_y[i-1]
 
     def copy(self):
         """
@@ -2140,8 +2063,6 @@ class Cell:
             "delta_x": [round(float(x), 2) for x in self.delta_x],
             "delta_y": [round(float(x), 2) for x in self.delta_y],
             "area_gp": [int(x) for x in self.area_gp],
-            # "width_gp": [int(x) for x in self.width_gp],
-            # "length_gp": [int(x) for x in self.length_gp],
             "max_val": [round(float(x), 2) for x in self.max_val],
             "score": [round(float(x), 2) for x in self.score],
         }
@@ -2170,8 +2091,6 @@ class Cell:
         self.delta_x = cell_dict["delta_x"]
         self.delta_y = cell_dict["delta_y"]
         self.area_gp = cell_dict["area_gp"]
-        # self.width_gp = cell_dict["width_gp"]
-        # self.length_gp = cell_dict["length_gp"]
         self.max_val = cell_dict["max_val"]
         self.score = cell_dict["score"]
 
@@ -2237,8 +2156,6 @@ def write_to_json(cellss, filename):
             "delta_x": "list of delta x for each timestep in cell lifetime",
             "delta_y": "list of delta y for each timestep in cell lifetime",
             "area_gp": "list of area in gridpoints for each timestep in cell lifetime",
-            # "width_gp": "list of width (relative to cell movement vector) in gridpoints for each timestep in cell lifetime",
-            # "length_gp": "list of length (relative to cell movement vector) in gridpoints for each timestep in cell lifetime",
             "max_val": "list of max value for each timestep in cell lifetime",
             "score": "list of tracking score for each timestep in cell lifetime, -1 is nan",
         },
@@ -2339,11 +2256,7 @@ def write_masks_to_netcdf(
     )
 
     # write to netcdf file
-    # ds.to_netcdf(filename)
     ds.to_netcdf(filename,encoding={'cell_mask': {'zlib': True, 'complevel': 9}})
-
-    # compress netcdf file
-    # os.system("nczip " + filename)
 
     return ds
 
@@ -2388,15 +2301,6 @@ def read_from_json(filename):
         return
 
     return cellss
-
-
-def add_masks(cells, filename):
-    """
-    adds masks to cell objects from netcdf file
-    this is only a post processing function, not used in tracking
-    todo: this needs to be implemented
-    """
-    return
 
 
 if __name__ == "__main__":
