@@ -138,7 +138,6 @@ def track_cells(
 
         # initiate new cells from labels remaining in list and add to cells
         for label in labels:
-            # logging.info(f"initiating new cell, id: {cell_id}")
             cells_alive.append(Cell(cell_id, label, nowdate))
             cells_alive[-1].area_gp.append(
                 np.count_nonzero(labeled == cells_alive[-1].label[-1])
@@ -287,8 +286,6 @@ def fill_gaps(cells, fields, datelist):
                             ),
                             2,
                         )
-                    else:
-                        pass
         last_field = field
 
     return cells
@@ -343,8 +340,6 @@ def generate_flow_field(cells, grid_shape, subsampling=1):
         flow_field[:, :, 0] = grid_u
         flow_field[:, :, 1] = grid_v
 
-        # logging.info("linear interpolation used for flow field")
-
         return flow_field
 
     elif len(u_vel) > 0:  # simple average of all cell vectors for less than 4 cells
@@ -352,8 +347,6 @@ def generate_flow_field(cells, grid_shape, subsampling=1):
         flow_field = np.zeros((1, 1, 2))
         flow_field[:, :, 0] = np.mean(u_vel)
         flow_field[:, :, 1] = np.mean(v_vel)
-
-        # logging.info("simple mean used for flow field")
 
         return flow_field
 
@@ -531,9 +524,6 @@ def assign_new_labels(
     cell_id: last used cell identifier, int
     """
 
-    # logging.info("-------------------------------------")
-    # logging.info("nowdate is " + nowdate.strftime("%m.%d %H:%M"))
-
     # will be pruned as labels are assigned
     labels = np.unique(labeled).tolist()
     if 0 in labels:
@@ -613,13 +603,6 @@ def assign_new_labels(
                 id.append(new_ids[i])
         merging_ids.append(id)
 
-    # logging.info(f"splitting_ids {splitting_ids}")
-    # logging.info(f"splitting_labels {splitting_labels}")
-    # logging.info(f"splitting_areas {splitting_areas}")
-
-    # logging.info(f"merging_ids {merging_ids}")
-    # logging.info(f"merging_labels {merging_labels}")
-
     cell_ids = []
     for cell in cells:
         cell_ids.append(cell.cell_id)
@@ -642,16 +625,8 @@ def assign_new_labels(
                     cells[cell_ids.index(id)].overlap.append(
                         overlap[active_ids.index(id)]
                     )
-                    # logging.info(
-                # "cell %d was assigned label %d with %d count and %.3f score",
-                #                         cells[cell_ids.index(id)].cell_id,
-                #                         cells[cell_ids.index(id)].label[-1],
-                #                         cells[cell_ids.index(id)].area_gp[-1],
-                #                         cells[cell_ids.index(id)].score[-1],
-                #                     )
                 else:
                     cells[cell_ids.index(id)].merged_to = ids[0]
-                    # logging.info(f"cell {id} was merged to id {ids[0]}")
                     cells[cell_ids.index(id)].terminate("merged")
 
     # splitting cells
@@ -676,24 +651,10 @@ def assign_new_labels(
                     cells[cell_ids.index(id)].overlap.append(
                         overlap[candidates.index(label)]
                     )
-                    # logging.info(
-                    #     "cell %d was assigned label %d with %d count and %.3f score",
-                    #     cells[cell_ids.index(id)].cell_id,
-                    #     cells[cell_ids.index(id)].label[-1],
-                    #     cells[cell_ids.index(id)].area_gp[-1],
-                    #     cells[cell_ids.index(id)].score[-1],
-                    # )
             else:
                 cells[cell_ids.index(id)].child.append(cell_id)
                 child_cells.append(Cell(cell_id, label, nowdate, parent=id))
                 child_cells[-1].area_gp.append(counts[candidates.index(label)])
-                # logging.info(
-                #     "cell %d is child of %d with label %d and %d count",
-                #     cell_id,
-                #     id,
-                #     label,
-                #     cells[cell_ids.index(id)].area_gp[-1],
-                # )
                 cell_id += 1
 
     for cell in cells:
@@ -713,19 +674,10 @@ def assign_new_labels(
                     labels.remove(new_label)
                 cell.datelist.append(nowdate)
                 cell.area_gp.append(counts[idx])
-                # cells[mod_cell_id].area_gp.append(np.count_nonzero(labeled==new_label))
                 cell.score.append(scores[new_idx])
                 cell.overlap.append(overlap[idx])
 
-                # logging.info(
-                #     "cell %d was assigned label %d with %d count and %.3f score",
-                #     cell.cell_id,
-                #     cell.label[-1],
-                #     cell.area_gp[-1],
-                #     cell.score[-1],
-                # )
         else:
-            # logging.warning(f"cell with id {cell.cell_id} was not found in new step")
             cell.terminate("not found in new step (could be error)")
 
     # append child cells
@@ -781,7 +733,6 @@ def find_correspondences(
         cluster_ids, cluster_labels = find_cluster_members(
             active_ids_left, candidates_left
         )
-        # logging.info(f"cluster with ids {cluster_ids}, and labels {cluster_labels}")
 
         # find all possible combinations of correspondences between involved parties
         # calculate ratings for all possibilities
@@ -807,10 +758,6 @@ def find_correspondences(
 
         active_ids_left = [x for x in active_ids_left if x not in cluster_ids]
         candidates_left = [x for x in candidates_left if x not in cluster_labels]
-
-    # logging.info(f"new_ids {new_ids_combined}")
-    # logging.info(f"new_labels {new_labels_combined}")
-    # logging.info(f"scores {scores_combined}")
 
     return new_ids_combined, new_labels_combined, scores_combined
 
@@ -1205,11 +1152,6 @@ def find_overlaps(
         else:
             cell.terminate("faded")
 
-    # logging.info(f"active_ids {active_ids}")
-    # logging.info(f"candidates {candidates}")
-    # logging.info(f"counts {counts}")
-    # logging.info(f"overlap {overlap}")
-
     return (
         active_ids,
         candidates,
@@ -1598,12 +1540,6 @@ class Cell:
         parent: parent cell, Cell
         """
 
-        if self.datelist[-1] not in parent.datelist:
-            # logging.warning(
-            #     "parent datelist does not contain self datelist[-1], could not append split member"
-            # )
-            return
-
         split_idx = parent.datelist.index(self.datelist[0]) - 1
         self.label.insert(0, parent.label[split_idx])
 
@@ -1638,18 +1574,6 @@ class Cell:
         in
         parent: parent cell, Cell
         """
-        # logging.info(
-        # "inserting merged timestep from "
-        #     + str(parent.cell_id)
-        #     + " to "
-        #     + str(self.cell_id)
-        # )
-
-        if self.datelist[-1] not in parent.datelist:
-            # logging.warning(
-            #     "parent datelist does not contain self datelist[-1], could not append merge member"
-            # )
-            return
 
         merge_idx = parent.datelist.index(self.datelist[-1]) + 1
         self.label.append(parent.label[merge_idx])
@@ -1688,10 +1612,6 @@ class Cell:
         if self.alive:
             self.died_of = reason
             self.alive = False
-            # logging.info("cell %d was terminated, reason is: %s", self.cell_id, reason)
-        else:
-            pass
-            # logging.warning("cell %d is already dead!", self.cell_id)
 
     def print_summary(self):
         """
@@ -1990,7 +1910,7 @@ class Cell:
 
     def get_human_str(self):
         """
-        generates human readable string of cell object for # logging
+        generates human readable string of cell object
 
         out
         outstr: human readable string of cell object, string
@@ -2022,22 +1942,6 @@ class Cell:
         outstr += "\n\n"
 
         return outstr
-
-    def check_consistency(self):
-        """
-        checks some cell parameters to see if they're cconsistent
-        """
-        if len(self.datelist) != len(self.mass_center_x):
-            # logging.warning("cell %d has inconsistencies", self.cell_id)
-            # logging.info("len(self.datelist): %d", len(self.datelist))
-            # logging.info("len(self.mass_center_x): %d", len(self.mass_center_x))
-            # logging.info("len(self.area_gp): %d", len(self.area_gp))
-            # logging.debug(f"self.datelist {self.datelist}")
-            # logging.debug(f"self.mass_center_x {self.mass_center_x}")
-            # logging.debug(f"self.mass_center_y {self.mass_center_y}")
-            # logging.debug(f"self.delta_x {self.delta_x}")
-            # # logging.debug(f"self.delta_y {self.delta_y}")
-            pass
 
     def to_dict(self):
         """
