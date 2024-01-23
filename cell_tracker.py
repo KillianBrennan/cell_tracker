@@ -49,7 +49,7 @@ def track_cells(
     v_limit=10,
     min_area=16,
     alpha=0.5,
-    velocity_score_weight=0.5,
+    beta=0.5,
     min_lifespan=30,
     aura=5,
     quiet=True,
@@ -71,7 +71,7 @@ def track_cells(
     v_limit: limit of distance (in gridpoints) per timestept to advect search mask, float
     min_area: minimum area (in gridpoints) for a cell to be considered, int
     alpha: weight of overlap in score, float
-    velocity_score_weight: weight of velocity in score, float
+    beta: weight of velocity in score, float
     min_lifespan: minimum lifespan (in minutes) for a cell to be considered, float
     aura: number of gridpoints to dilate labels, int
     quiet: suppress tqdm output, bool
@@ -119,7 +119,7 @@ def track_cells(
             v_limit,
             min_area,
             alpha,
-            velocity_score_weight,
+            beta,
             cluster_size_limit,
         )
 
@@ -476,7 +476,7 @@ def assign_new_labels(
     v_limit,
     min_area,
     alpha,
-    velocity_score_weight,
+    beta,
     cluster_size_limit,
 ):
     """
@@ -495,7 +495,7 @@ def assign_new_labels(
     v_limit: limit of distance (in gridpoints) per timestept to advect search mask, float
     min_area: minimum area (in gridpoints) for a cell to be considered, int
     alpha: weight of overlap in score, float
-    velocity_score_weight: weight of velocity in score, float
+    beta: weight of velocity in score, float
     cluster_size_limit: maximum number of cells in a cluster, before more crude solution is applied to solving cluster, int
 
     out
@@ -552,7 +552,7 @@ def assign_new_labels(
         last_center,
         candidate_center,
         alpha,
-        velocity_score_weight,
+        beta,
         cluster_size_limit,
     )
 
@@ -676,7 +676,7 @@ def find_correspondences(
     last_center,
     candidate_center,
     alpha,
-    velocity_score_weight,
+    beta,
     cluster_size_limit,
 ):
     """
@@ -692,7 +692,7 @@ def find_correspondences(
     last_center: last cell center, list
     candidate_center: center of candidate cells, list
     alpha: weight of overlap in score, float
-    velocity_score_weight: weight of velocity in score, float
+    beta: weight of velocity in score, float
     cluster_size_limit: maximum number of cells in a cluster, before more crude solution is applied to solving cluster, int
 
     out
@@ -728,7 +728,7 @@ def find_correspondences(
             last_center,
             candidate_center,
             alpha,
-            velocity_score_weight,
+            beta,
             cluster_size_limit,
         )
 
@@ -753,7 +753,7 @@ def correspond_cluster(
     last_center_all,
     candidate_center_all,
     alpha,
-    velocity_score_weight,
+    beta,
     cluster_size_limit,
 ):
     """
@@ -770,7 +770,7 @@ def correspond_cluster(
     last_center_all: last cell center, list
     candidate_center_all: center of candidate cells, list
     alpha: weight of overlap in score, float
-    velocity_score_weight: weight of velocity in score, float
+    beta: weight of velocity in score, float
     cluster_size_limit: maximum number of cells in cluster, int
 
     out
@@ -841,7 +841,7 @@ def correspond_cluster(
                         [last_center[i] for i in mask],
                         [candidate_center[i] for i in mask],
                         alpha,
-                        velocity_score_weight,
+                        beta,
                     )
                 )
             else:
@@ -1146,7 +1146,7 @@ def calculate_score(
     last_center,
     candidate_center,
     alpha,
-    velocity_score_weight,
+    beta,
 ):
     """
     calculate correspondence score between old feature and all new features
@@ -1159,7 +1159,7 @@ def calculate_score(
     last_center: last cell center, list
     candidate_center: center of candidate cells, list
     alpha: weight of overlap in score, float
-    velocity_score_weight: weight of velocity in score, float
+    beta: weight of velocity in score, float
 
     out
     score: score of correspondence, float
@@ -1177,7 +1177,7 @@ def calculate_score(
 
     # score based on velocity similarity from last to current timestep
 
-    beta = velocity_score_weight
+    beta = beta
 
     if (None in [item for sublist in last_velocity for item in sublist]) | (
         None in [item for sublist in last_center for item in sublist]
