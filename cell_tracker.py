@@ -809,7 +809,7 @@ def correspond_cluster(
             last_velocity,
             last_center,
             candidate_center,
-        ) = reduce_cluster_size(
+        ) = prune_cluster(
             ids,
             candidates,
             counts,
@@ -871,7 +871,7 @@ def correspond_cluster(
     return new_ids, new_labels, scores_filtered
 
 
-def reduce_cluster_size(
+def prune_cluster(
     ids,
     candidates,
     counts,
@@ -994,7 +994,7 @@ def permutate_cluster(ids, candidates):
 
     permutations.pop(0)
 
-    # should never be reached, since it is handeled by cluster_size_limit & reduce_cluster_size
+    # should never be reached, since it is handeled by cluster_size_limit & prune_cluster
     if len(ids) > 16:
         print(f"large number of permutations: {len(permutations)}, from {len(ids)} ids")
     if len(ids) > 20:
