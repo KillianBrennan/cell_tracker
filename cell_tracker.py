@@ -24,6 +24,8 @@ import collections
 
 import json
 import numpy as np
+import numpy.typing as npt
+
 from tqdm import tqdm
 import xarray as xr
 
@@ -37,25 +39,25 @@ from skimage.morphology import h_maxima, disk
 
 
 def track_cells(
-    fields,
-    datelist,
-    field_static,
-    prominence=10,
-    threshold=5,
-    min_distance=6,
-    fill_method="watershed",
-    advection_method="movement_vector",
-    dynamic_tracking=4,
-    v_limit=10,
-    min_area=16,
-    alpha=0.5,
-    beta=0.5,
-    min_lifespan=30,
-    aura=5,
-    quiet=True,
-    cluster_size_limit=16,
-    peak_threshold=False,
-):
+    fields: npt.ArrayLike,
+    datelist: list,
+    field_static: dict,
+    prominence: float = 10,
+    threshold: float = 5,
+    min_distance: float = 6,
+    fill_method: str = "watershed",
+    advection_method: str = "movement_vector",
+    dynamic_tracking: str = 4,
+    v_limit: int = 10,
+    min_area: int = 16,
+    alpha: float = 0.5,
+    beta: float = 0.5,
+    min_lifespan: int = 30,
+    aura: int = 5,
+    quiet: bool = True,
+    cluster_size_limit: int = 16,
+    peak_threshold: bool = False,
+) -> list:
     """
     finds cells using initial cells and tracking them forwards through overlapping area from t-1 to t
 
@@ -82,6 +84,24 @@ def track_cells(
     out
     cells: list of cell objects, list
     """
+
+    ## check inputs
+    # check if time dimension is equal to length of datelist
+    if len(fields) != len(datelist):
+        raise ValueError("fields and datelist must have the same length")
+    # check lat and lon versus field shape
+    if (field_static["lat"].shape[0] != fields[0].shape[0]) or (
+        field_static["lat"].shape[1] != fields[0].shape[1]
+    ):
+        raise ValueError("field_static and fields must have the same shape")
+    if (field_static["lon"].shape[0] != fields[0].shape[0]) or (
+        field_static["lon"].shape[1] != fields[0].shape[1]
+    ):
+        raise ValueError("field_static and fields must have the same shape")
+    # datelist must contain datetime objects
+    if not all(isinstance(item, np.datetime64) for item in datelist):
+        raise ValueError("datelist must contain datetime objects")
+    
     cells_alive = []  # list of active cell objects
     cells_dead = []  # list of deceased cell objects
     cells = []  # list of final cell objects
@@ -337,7 +357,9 @@ def generate_flow_field(cells, grid_shape, subsampling=1):
         return None
 
 
-def label_local_maximas(field, prominence, threshold, min_distance, fill_method, aura, peak_threshold=False):
+def label_local_maximas(
+    field, prominence, threshold, min_distance, fill_method, aura, peak_threshold=False
+):
     """
     labels areas of lokal peaks (separated by min_distance)
 
@@ -1558,7 +1580,7 @@ class Cell:
         parent: parent cell, Cell
         """
 
-        merge_idx = parent.datelist.index(self.datelist[-1]) + 1
+        merge_idx = parent.datelist.index(self.datelist[-1]) # + 1 todo
         self.label.append(parent.label[merge_idx])
 
         self.datelist.append(parent.datelist[merge_idx])
@@ -1794,7 +1816,7 @@ class Cell:
                     )
 
                     # first or last timestep of cell_to_append has been added by add_split_timestep or add_merged_timestep so it doesnt need to be added.
-                    if i not in (0,len(cell_to_append.datelist) - 1):
+                    if i not in (0, len(cell_to_append.datelist) - 1):
                         self.area_gp[index] += cell_to_append.area_gp[i]
 
                 if self.max_val[index] < cell_to_append.max_val[i]:
@@ -1988,6 +2010,7 @@ class Cell:
         self.label = []
         self.swath = []
 
+
 def write_to_json(cellss, filename):
     """
     writes ascii file containing cell object information
@@ -2051,7 +2074,6 @@ def write_to_json(cellss, filename):
         json.dump(struct, f)
 
     return struct
-    
 
 
 def write_masks_to_netcdf(
@@ -2105,9 +2127,9 @@ def write_masks_to_netcdf(
         for cell in cellss[m]:
             for i, t in enumerate(cell.datelist):
                 date_index = np.where(datelist == t)[0][0]
-                mask_array[
-                    m, date_index, cell.field[i][:, 0], cell.field[i][:, 1]
-                ] = cell.cell_id
+                mask_array[m, date_index, cell.field[i][:, 0], cell.field[i][:, 1]] = (
+                    cell.cell_id
+                )
 
     if len(members) == 1:
         # if we are not dealing with a ensemble, remove member dimension
@@ -2145,6 +2167,7 @@ def write_masks_to_netcdf(
     ds.to_netcdf(filename, encoding={"cell_mask": {"zlib": True, "complevel": 9}})
 
     return ds
+
 
 def read_from_json(filename):
     """
@@ -2186,6 +2209,7 @@ def read_from_json(filename):
         return
 
     return cellss
+
 
 if __name__ == "__main__":
     pass

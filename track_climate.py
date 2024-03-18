@@ -12,12 +12,10 @@ output:
     cell_tracks_YYYYMMDD.json: json file containing cell tracks
     cell_masks_YYYYMMDD.nc: netcdf file containing cell masks
 
-example use
-
+example use:
 python /home/kbrennan/cell_tracker/track_climate.py /home/kbrennan/phd/data/climate/cosmo6_2017/data /home/kbrennan/phd/data/climate/cosmo6_2017/tracks 20170725 20170725
 
 """
-import sys
 import os
 import argparse
 
