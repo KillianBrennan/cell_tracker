@@ -54,6 +54,7 @@ def track_cells(
     aura=5,
     quiet=True,
     cluster_size_limit=16,
+    peak_threshold=False,
 ):
     """
     finds cells using initial cells and tracking them forwards through overlapping area from t-1 to t
@@ -76,6 +77,7 @@ def track_cells(
     aura: number of gridpoints to dilate labels, int
     quiet: suppress tqdm output, bool
     cluster_size_limit: maximum number of cells in a cluster, before more crude solution is applied to solving cluster, int
+    peak_threshold: if True, maxima of cell must exceed threshold+prominence to be considered a cell, if False, maxima of cell must only exceed threshold to be considered a cell and prominence is only used to segregate between neighboring cells, bool
 
     out
     cells: list of cell objects, list
@@ -103,6 +105,7 @@ def track_cells(
             min_distance,
             fill_method,
             aura,
+            peak_threshold=peak_threshold,
         )
 
         # assign lables at current timestep from areas overlapping to last timestep
@@ -334,7 +337,7 @@ def generate_flow_field(cells, grid_shape, subsampling=1):
         return None
 
 
-def label_local_maximas(field, prominence, threshold, min_distance, fill_method, aura):
+def label_local_maximas(field, prominence, threshold, min_distance, fill_method, aura, peak_threshold=False):
     """
     labels areas of lokal peaks (separated by min_distance)
 
@@ -345,13 +348,18 @@ def label_local_maximas(field, prominence, threshold, min_distance, fill_method,
     min_distance: minimum distance (in gridpoints) between local maxima, float
     fill_method: method used to fill areas between cells, string
     aura: number of gridpoints to dilate labels, int
+    peak_threshold: if True, maxima of cell must exceed threshold+prominence to be considered a cell, if False, maxima of cell must only exceed threshold to be considered a cell and prominence is only used to segregate between neighboring cells, bool
 
     out
     labeled: connected component labeled with unique label, array
     above_threshold: above threshold binary area, array
     """
 
-    field_shifted = field + prominence - threshold
+    if peak_threshold:
+        field_shifted = field - threshold
+    else:
+        field_shifted = field + prominence - threshold
+
     field_shifted[field < threshold] = 0
 
     mask_prominence = h_maxima(field_shifted, prominence)
