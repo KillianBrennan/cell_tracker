@@ -99,8 +99,8 @@ def track_cells(
     ):
         raise ValueError("field_static and fields must have the same shape")
     # datelist must contain datetime objects
-    if not all(isinstance(item, np.datetime64) for item in datelist):
-        raise ValueError("datelist must contain datetime objects")
+    # if not all(isinstance(item, np.datetime64) for item in datelist):
+    #     raise ValueError("datelist must contain datetime objects")
     
     cells_alive = []  # list of active cell objects
     cells_dead = []  # list of deceased cell objects
@@ -1546,6 +1546,9 @@ class Cell:
         """
 
         split_idx = parent.datelist.index(self.datelist[0]) - 1
+        # check wether split_idx is out of bounds
+        if split_idx < 0:
+            split_idx = 0
         self.label.insert(0, parent.label[split_idx])
 
         self.datelist.insert(0, parent.datelist[split_idx])
@@ -1580,7 +1583,10 @@ class Cell:
         parent: parent cell, Cell
         """
 
-        merge_idx = parent.datelist.index(self.datelist[-1]) # + 1 todo
+        merge_idx = parent.datelist.index(self.datelist[-1]) + 1
+        # check wether merge_idx is out of bounds
+        if merge_idx == len(parent.datelist):
+            merge_idx -= 1
         self.label.append(parent.label[merge_idx])
 
         self.datelist.append(parent.datelist[merge_idx])
