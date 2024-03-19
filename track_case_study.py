@@ -48,7 +48,9 @@ def main(inpath, outpath, paralel=False):
         # load data
         memberpath = os.path.join(inpath, member)
 
-        ds = xr.open_mfdataset(os.path.join(memberpath, "lfff*.nc"), combine="by_coords")
+        ds = xr.open_mfdataset(
+            os.path.join(memberpath, "lfff*.nc"), combine="by_coords"
+        )
 
         field_static = {}
         field_static["lat"] = ds["lat"].values
@@ -56,19 +58,35 @@ def main(inpath, outpath, paralel=False):
 
         timesteps = ds["time"].values
 
-        fields = ds["W"].max(dim='level1').values
+        # fields = ds["W"].max(dim="level1").values # todo: leads to too many permutations error, maybe exclude near ground levels
+        fields = ds["W"].isel(level1=25).values
 
         print("tracking cells")
         cells = track_cells(
-            fields, timesteps, field_static=field_static, min_area=5, aura=3
+            fields,
+            timesteps,
+            field_static=field_static,
+            min_area=5, # 5
+            aura=3,
+            threshold=5, # 5
+            min_distance=6, # 6
+            prominence=10,
+            
         )
 
         with open(os.path.join(outpath, "cells_" + member + ".pickle"), "wb") as f:
             cPickle.dump(cells, f)
 
-        _ = write_to_json(cells, os.path.join(outpath, "cell_tracks_" + member + ".json"))
+        _ = write_to_json(
+            cells, os.path.join(outpath, "cell_tracks_" + member + ".json")
+        )
 
-        _ = write_masks_to_netcdf(cells, timesteps, field_static, os.path.join(outpath, "cell_masks_" + member + ".nc"))
+        _ = write_masks_to_netcdf(
+            cells,
+            timesteps,
+            field_static,
+            os.path.join(outpath, "cell_masks_" + member + ".nc"),
+        )
 
 
 if __name__ == "__main__":

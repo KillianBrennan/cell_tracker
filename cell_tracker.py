@@ -2050,7 +2050,7 @@ def write_to_json(cellss, filename):
         return None
 
     struct = {
-        "info": "cell track data generated using track_cells_v2.py",
+        "info": "cell track data generated using cell_tracker.py",
         "author": "Killian P. Brennan (killian.brennan@env.ethz.ch)",
         "data_structure": data_structure,
         "parameters": {
