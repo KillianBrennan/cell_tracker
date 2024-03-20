@@ -13,15 +13,18 @@ output:
     cell_masks_YYYYMMDD.nc: netcdf file containing cell masks
 
 example use:
-python /home/kbrennan/cell_tracker/track_climate.py /home/kbrennan/phd/data/climate/cosmo6_2017/data /home/kbrennan/phd/data/climate/cosmo6_2017/tracks 20170725 20170725
+python /home/kbrennan/cell_tracker/track_climate.py /home/kbrennan/phd/data/climate/5min_2D/present /home/kbrennan/phd/data/climate/tracks/present/test 20210628 20210628
 
 """
+
 import os
 import argparse
 
 import xarray as xr
 import pandas as pd
 import numpy as np
+
+import _pickle as cPickle
 
 from cell_tracker import (
     Cell,
@@ -30,13 +33,16 @@ from cell_tracker import (
     write_masks_to_netcdf,
 )
 
+
 def main(inpath, outpath, start_day, end_day):
     # set tracking parameters
     min_distance = 5
     dynamic_tracking = 4
     v_limit = 5
-    min_area = 16
+    min_area = 9 # 16
     quiet = True
+    aura = 1 # 0
+    threshold = 10.1 # 5
 
     start_day = pd.to_datetime(start_day, format="%Y-%m-%dT%H")
     end_day = pd.to_datetime(end_day, format="%Y-%m-%dT%H")
@@ -77,13 +83,20 @@ def main(inpath, outpath, start_day, end_day):
             dynamic_tracking=dynamic_tracking,
             v_limit=v_limit,
             min_area=min_area,
+            threshold=threshold,
+            aura=aura,
         )
 
         print("gap filling swaths")
         swath = ds["DHAIL_MX"].max(dim="time").values
         swath_gf = swath
+        n_cells = len(cells)
+        cell_swaths = np.zeros((n_cells, swath.shape[0], swath.shape[1]))
+        cell_ids = []
         for cell in cells:
             swath_gf = np.max(np.dstack((cell.swath, swath_gf)), 2)
+            cell_swaths[cell.cell_id, :, :] = cell.swath
+            cell_ids.append(cell.cell_id)
 
         # add empty dimension for time
         swath_gf = np.expand_dims(swath_gf, axis=0)
@@ -92,6 +105,15 @@ def main(inpath, outpath, start_day, end_day):
             {"DHAIL_MX": (["time", "rlat", "rlon"], swath_gf)},
             coords={
                 "time": np.atleast_1d(ds["time"][0].values),
+                "rlat": ds["rlat"].values,
+                "rlon": ds["rlon"].values,
+            },
+        )
+
+        cell_swaths_nc = xr.Dataset(
+            {"cell_swath": (["cell_id", "rlat", "rlon"], cell_swaths)},
+            coords={
+                "cell_id": cell_ids,
                 "rlat": ds["rlat"].values,
                 "rlon": ds["rlon"].values,
             },
@@ -108,10 +130,26 @@ def main(inpath, outpath, start_day, end_day):
             coords={"rlat": ds["rlat"].values, "rlon": ds["rlon"].values},
         )
 
+        cell_swaths_nc["lat"] = xr.DataArray(
+            ds["lat"].values,
+            dims=["rlat", "rlon"],
+            coords={"rlat": ds["rlat"].values, "rlon": ds["rlon"].values},
+        )
+        cell_swaths_nc["lon"] = xr.DataArray(
+            ds["lon"].values,
+            dims=["rlat", "rlon"],
+            coords={"rlat": ds["rlat"].values, "rlon": ds["rlon"].values},
+        )
+
         # add long name to swath
-        swath_gf_nc.attrs["long_name"] = "gap filled swath using cell tracking"
+        swath_gf_nc.attrs["long_name"] = "daily gap filled swath using cell tracking"
         # add units to swath
         swath_gf_nc.attrs["units"] = "mm"
+
+        # add long name to cell_swaths
+        cell_swaths_nc.attrs["long_name"] = "gap filled swath of individual cells using cell tracking"
+        # add units to cell_swaths
+        cell_swaths_nc.attrs["units"] = "mm"
 
         print("writing data to file")
         outfile_json = os.path.join(
@@ -120,16 +158,36 @@ def main(inpath, outpath, start_day, end_day):
         outfile_nc = os.path.join(
             outpath, "cell_masks_" + day.strftime("%Y%m%d") + ".nc"
         )
-
         outfile_gapfilled = os.path.join(
             outpath, "gap_filled_" + day.strftime("%Y%m%d") + ".nc"
         )
+        outfile_cell_swaths = os.path.join(
+            outpath, "cell_swaths_" + day.strftime("%Y%m%d") + ".nc"
+        )
+        outfile_pickle = os.path.join(
+            outpath, "cells_" + day.strftime("%Y%m%d") + ".pickle"
+        )
+
         _ = write_to_json(cells, outfile_json)
 
-        _ = write_masks_to_netcdf(cells, timesteps, field_static, outfile_nc)
+        _ = write_masks_to_netcdf(
+            cells,
+            timesteps,
+            field_static,
+            outfile_nc,
+        )
 
-        swath_gf_nc.to_netcdf(outfile_gapfilled)
+        swath_gf_nc.to_netcdf(
+            outfile_gapfilled,
+            # encoding={"DHAIL_MX": {"zlib": True, "complevel": 9}},engine="h5netcdf",
+        )
         # os.system("nczip " + outfile_gapfilled)
+        cell_swaths_nc.to_netcdf(
+            outfile_cell_swaths,
+            # encoding={"cell_swath": {"zlib": True, "complevel": 9}},engine="h5netcdf",
+        )
+        # with open(outfile_pickle, "wb") as f:
+        #     cPickle.dump(cells, f)
 
     print("finished tracking all days in queue")
     return

@@ -101,7 +101,7 @@ def track_cells(
     # datelist must contain datetime objects
     # if not all(isinstance(item, np.datetime64) for item in datelist):
     #     raise ValueError("datelist must contain datetime objects")
-    
+
     cells_alive = []  # list of active cell objects
     cells_dead = []  # list of deceased cell objects
     cells = []  # list of final cell objects
@@ -1582,10 +1582,14 @@ class Cell:
         in
         parent: parent cell, Cell
         """
+        if self.datelist[-1] not in parent.datelist:
+            # print('merge timestep not found in parent datelist.', self.datelist[-1], parent.datelist)
+            return
 
         merge_idx = parent.datelist.index(self.datelist[-1]) + 1
         # check wether merge_idx is out of bounds
         if merge_idx == len(parent.datelist):
+            # print('merge index out of bounds.', self.datelist[-1], parent.datelist)
             merge_idx -= 1
         self.label.append(parent.label[merge_idx])
 
@@ -2170,7 +2174,11 @@ def write_masks_to_netcdf(
     )
 
     # write to netcdf file
-    ds.to_netcdf(filename, encoding={"cell_mask": {"zlib": True, "complevel": 9}})
+    ds.to_netcdf(
+        filename,
+        encoding={"cell_mask": {"zlib": True, "complevel": 9}},
+        engine="h5netcdf",
+    )
 
     return ds
 
