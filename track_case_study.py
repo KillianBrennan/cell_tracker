@@ -69,8 +69,9 @@ def main(inpath, outpath, paralel=False):
             min_area=5, # 5
             aura=3,
             threshold=5, # 5
-            min_distance=6, # 6
-            prominence=10,
+            min_distance=10, # 6
+            prominence=5,
+            peak_threshold=True,
             
         )
 

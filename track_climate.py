@@ -39,10 +39,10 @@ def main(inpath, outpath, start_day, end_day):
     min_distance = 5
     dynamic_tracking = 4
     v_limit = 5
-    min_area = 9 # 16
+    min_area = 9  # 16
     quiet = True
-    aura = 1 # 0
-    threshold = 10.1 # 5
+    aura = 1  # 0
+    threshold = 10.1  # 5
 
     start_day = pd.to_datetime(start_day, format="%Y-%m-%dT%H")
     end_day = pd.to_datetime(end_day, format="%Y-%m-%dT%H")
@@ -147,7 +147,9 @@ def main(inpath, outpath, start_day, end_day):
         swath_gf_nc.attrs["units"] = "mm"
 
         # add long name to cell_swaths
-        cell_swaths_nc.attrs["long_name"] = "gap filled swath of individual cells using cell tracking"
+        cell_swaths_nc.attrs["long_name"] = (
+            "gap filled swath of individual cells using cell tracking"
+        )
         # add units to cell_swaths
         cell_swaths_nc.attrs["units"] = "mm"
 
@@ -179,12 +181,12 @@ def main(inpath, outpath, start_day, end_day):
 
         swath_gf_nc.to_netcdf(
             outfile_gapfilled,
-            # encoding={"DHAIL_MX": {"zlib": True, "complevel": 9}},engine="h5netcdf",
+            encoding={"DHAIL_MX": {"zlib": True, "complevel": 5}},
         )
         # os.system("nczip " + outfile_gapfilled)
         cell_swaths_nc.to_netcdf(
             outfile_cell_swaths,
-            # encoding={"cell_swath": {"zlib": True, "complevel": 9}},engine="h5netcdf",
+            encoding={'cell_swath': {'zlib': True, 'complevel': 5}}
         )
         # with open(outfile_pickle, "wb") as f:
         #     cPickle.dump(cells, f)

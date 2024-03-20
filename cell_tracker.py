@@ -2176,8 +2176,7 @@ def write_masks_to_netcdf(
     # write to netcdf file
     ds.to_netcdf(
         filename,
-        encoding={"cell_mask": {"zlib": True, "complevel": 9}},
-        engine="h5netcdf",
+        encoding={"cell_mask": {"zlib": True, "complevel": 5}},
     )
 
     return ds
