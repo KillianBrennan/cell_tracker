@@ -166,9 +166,9 @@ def main(inpath, outpath, start_day, end_day):
         outfile_cell_swaths = os.path.join(
             outpath, "cell_swaths_" + day.strftime("%Y%m%d") + ".nc"
         )
-        outfile_pickle = os.path.join(
-            outpath, "cells_" + day.strftime("%Y%m%d") + ".pickle"
-        )
+        # outfile_pickle = os.path.join(
+        #     outpath, "cells_" + day.strftime("%Y%m%d") + ".pickle"
+        # )
 
         _ = write_to_json(cells, outfile_json)
 
