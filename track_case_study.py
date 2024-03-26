@@ -135,7 +135,6 @@ def pipeline(member, inpath, outpath):
         dims=["rlat", "rlon"],
         coords={"rlat": ds["rlat"].values, "rlon": ds["rlon"].values},
     )
-
     cell_swaths_nc["lat"] = xr.DataArray(
         ds["lat"].values,
         dims=["rlat", "rlon"],

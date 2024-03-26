@@ -1756,15 +1756,18 @@ class Cell:
         cell_ids = [cell.cell_id for cell in cells]
 
         if self.parent is not None:
+            # print('cell has parent',self.cell_id, self.parent)
             if self.parent in cell_ids:
                 self.append_cell(cells[self.parent], field_static)
 
-        if self.child is not None:
+        if len(self.child) > 0:
+            # print('cell has children',self.cell_id, self.child)
             for child in self.child:
                 if child in cell_ids:
                     self.append_cell(cells[child], field_static)
 
         if self.merged_to is not None:
+            # print('cell has merged to',self.cell_id, self.merged_to)
             if self.merged_to in cell_ids:
                 self.append_cell(cells[self.merged_to], field_static)
 
@@ -1777,11 +1780,17 @@ class Cell:
         cell_to_append: cell to append, Cell
         field_static: static field, dict
         """
+        # print(self.datelist)
         idx = 0
+        self_start_time = self.datelist[0]
+        self_end_time = self.datelist[-1]
+        
         for i, nowdate in enumerate(cell_to_append.datelist):
+            # print(nowdate)
             # both cells exist simultaneously
 
             if nowdate in self.datelist:
+                # print('associate and parent exists simultaneously')
                 index = self.datelist.index(nowdate)
 
                 if self.field is not None:
@@ -1844,7 +1853,8 @@ class Cell:
                         int(np.round(self.mass_center_y[index])),
                     ]
 
-            elif nowdate > self.datelist[-1]:
+            elif nowdate > self_end_time:
+                # print('associate exceeds parent lifetime')
                 index = -1
                 if self.field is not None:
                     self.field.append(cell_to_append.field[i])
@@ -1876,7 +1886,8 @@ class Cell:
 
                 self.lifespan = self.datelist[-1] - self.datelist[0]
 
-            elif nowdate < self.datelist[0]:
+            elif nowdate < self_start_time:
+                # print('associate predates parent lifetime')
                 if self.field is not None:
                     self.field.insert(idx, cell_to_append.field[i])
                 self.datelist.insert(idx, nowdate)
@@ -1909,7 +1920,7 @@ class Cell:
                 idx += 1
 
             else:
-                print("other appending error")
+                print("gap in parent datelist?")
 
         # recalculate delta_x/y from new mass centers
         for i in range(1, len(self.datelist)):
