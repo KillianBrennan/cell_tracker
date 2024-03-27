@@ -454,6 +454,8 @@ def advect_coordinates(flow_field, active_gps, new_delta_x, new_delta_y):
                 new_delta_x = flow_field[center[0], center[1], 0]
                 new_delta_y = flow_field[center[0], center[1], 1]
 
+
+    # todo: this factor 2 should not be needed, somewhere a timestep is skipped
     active_gps_shifted = active_gps + 2*np.array([new_delta_x, new_delta_y])
     # print(active_gps.mean(axis=0), active_gps_shifted.mean(axis=0))
 
@@ -1041,6 +1043,9 @@ def find_overlaps(
     # find areas overlapping with last timestep
     for cell in cells:  # pre-existing, alive cells in list
 
+        # last_coords = np.argwhere(labeled == cell.label[-1])
+        last_coords = cell.field[-1]
+
         new_delta_x, new_delta_y = determine_cell_movement(
             cell.delta_x,
             cell.delta_y,
@@ -1051,7 +1056,7 @@ def find_overlaps(
         if advection_method == "movement_vector":
             cell.search_vector.append([new_delta_x, new_delta_y])
             search_field = advect_coordinates(
-                flow_field, cell.field[-1], new_delta_x, new_delta_y
+                flow_field, last_coords, new_delta_x, new_delta_y
             )
             # remove coordinates outside of domain
             search_field = search_field[
@@ -1061,9 +1066,9 @@ def find_overlaps(
                 & (search_field[:, 1] < labeled.shape[1])
             ]
         else:
-            search_field = cell.field[-1]
+            search_field = last_coords
 
-        laa = cell.field[-1].shape[0]
+        laa = last_coords.shape[0]
 
         cell.search_field.append(search_field)
 
@@ -1079,7 +1084,6 @@ def find_overlaps(
         ids = []
         laas = []
         lvel = []
-        lcent = []
 
         if new_cell_labels:
             for label in new_cell_labels:
@@ -1090,7 +1094,6 @@ def find_overlaps(
                 ids.append(cell.cell_id)
                 laas.append(laa)
                 lvel.append([new_delta_x, new_delta_y])
-                lcent.append([cell.mass_center_x[-1], cell.mass_center_y[-1]])
 
             active_ids.extend(ids)
             candidates.extend(new_cell_labels)
