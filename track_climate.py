@@ -174,6 +174,7 @@ def main(inpath, outpath, start_day, end_day):
             timesteps,
             field_static,
             outfile_nc,
+            include_lat_lon=False,
         )
 
         swath_gf_nc.to_netcdf(
@@ -182,8 +183,7 @@ def main(inpath, outpath, start_day, end_day):
         )
         # os.system("nczip " + outfile_gapfilled)
         cell_swaths_nc.to_netcdf(
-            outfile_cell_swaths,
-            encoding={'cell_swath': {'zlib': True, 'complevel': 5}}
+            outfile_cell_swaths, encoding={"cell_swath": {"zlib": True, "complevel": 5}}
         )
         # with open(outfile_pickle, "wb") as f:
         #     cPickle.dump(cells, f)
