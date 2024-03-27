@@ -51,7 +51,6 @@ def track_cells(
     v_limit: int = 10,
     min_area: int = 16,
     alpha: float = 0.5,
-    beta: float = 0.5,
     min_lifespan: int = 30,
     aura: int = 5,
     quiet: bool = True,
@@ -74,7 +73,6 @@ def track_cells(
     v_limit: limit of distance (in gridpoints) per timestept to advect search mask, float
     min_area: minimum area (in gridpoints) for a cell to be considered, int
     alpha: weight of overlap in score, float
-    beta: weight of velocity in score, float
     min_lifespan: minimum lifespan (in minutes) for a cell to be considered, float
     aura: number of gridpoints to dilate labels, int
     quiet: suppress tqdm output, bool
@@ -106,7 +104,6 @@ def track_cells(
     cells_dead = []  # list of deceased cell objects
     cells = []  # list of final cell objects
     cell_id = 0  # initial unique cell id
-    last_labeled = []
     flow_field = None
 
     # tracking loop
@@ -125,6 +122,7 @@ def track_cells(
             min_distance,
             fill_method,
             aura,
+            min_area,
             peak_threshold=peak_threshold,
         )
 
@@ -132,7 +130,6 @@ def track_cells(
         cells_alive, labels, cell_id = assign_new_labels(
             cells_alive,
             labeled,
-            last_labeled,
             field,
             cell_id,
             nowdate,
@@ -140,9 +137,7 @@ def track_cells(
             advection_method,
             dynamic_tracking,
             v_limit,
-            min_area,
             alpha,
-            beta,
             cluster_size_limit,
         )
 
@@ -171,8 +166,6 @@ def track_cells(
         ]
 
         flow_field = generate_flow_field(cells_alive, field.shape, 10)
-
-        last_labeled = labeled
 
     # post processing
     cells = cells_alive + cells_dead
@@ -358,7 +351,14 @@ def generate_flow_field(cells, grid_shape, subsampling=1):
 
 
 def label_local_maximas(
-    field, prominence, threshold, min_distance, fill_method, aura, peak_threshold=False
+    field,
+    prominence,
+    threshold,
+    min_distance,
+    fill_method,
+    aura,
+    min_area,
+    peak_threshold=False,
 ):
     """
     labels areas of lokal peaks (separated by min_distance)
@@ -370,6 +370,7 @@ def label_local_maximas(
     min_distance: minimum distance (in gridpoints) between local maxima, float
     fill_method: method used to fill areas between cells, string
     aura: number of gridpoints to dilate labels, int
+    min_area: minimum area (in gridpoints) for a cell to be considered, int
     peak_threshold: if True, maxima of cell must exceed threshold+prominence to be considered a cell, if False, maxima of cell must only exceed threshold to be considered a cell and prominence is only used to segregate between neighboring cells, bool
 
     out
@@ -417,16 +418,22 @@ def label_local_maximas(
     # dilate labels
     labeled = expand_labels(labeled, distance=aura)
 
+    # remove labels with area smaller than min_area
+    labels = np.unique(labeled)
+    for label in labels:
+        if np.count_nonzero(labeled == label) < min_area:
+            labeled[labeled == label] = 0
+
     return labeled
 
 
-def advect_array(flow_field, array, new_delta_x, new_delta_y):
+def advect_coordinates(flow_field, active_gps, new_delta_x, new_delta_y):
     """
     advects cell labels according to movement vector
 
     in
     flow_field: estimated flow field, array
-    array: 2d meteorological field, array
+    array: coordinates within cell, array
     new_delta_x: movement vector x-component, float
     new_delta_y: movement vector y-component, float
 
@@ -436,23 +443,21 @@ def advect_array(flow_field, array, new_delta_x, new_delta_y):
     if new_delta_x is None:
         if flow_field is None:
             # no advection possible
-            return array
+            return active_gps
         else:
             if flow_field.shape == (1, 1, 2):  # mean flow field
                 new_delta_x = flow_field[0, 0, 0]
                 new_delta_y = flow_field[0, 0, 1]
             else:
-                coordinates = np.argwhere(array)
-                center = np.mean(coordinates, axis=0)
+                center = np.mean(active_gps, axis=0)
                 center = [int(round(x / 10)) for x in center]
                 new_delta_x = flow_field[center[0], center[1], 0]
                 new_delta_y = flow_field[center[0], center[1], 1]
 
-    # this is the right way, the axes are flipped
-    array = np.roll(array, int(round(new_delta_x)), axis=0)
-    array = np.roll(array, int(round(new_delta_y)), axis=1)  
+    active_gps_shifted = active_gps + 2*np.array([new_delta_x, new_delta_y])
+    # print(active_gps.mean(axis=0), active_gps_shifted.mean(axis=0))
 
-    return array
+    return np.round(active_gps_shifted).astype(int)
 
 
 def determine_cell_movement(delta_x, delta_y, n_timesteps_max, v_limit):
@@ -497,7 +502,6 @@ def determine_cell_movement(delta_x, delta_y, n_timesteps_max, v_limit):
 def assign_new_labels(
     cells,
     labeled,
-    last_labeled,
     field,
     cell_id,
     nowdate,
@@ -505,9 +509,7 @@ def assign_new_labels(
     advection_method,
     dynamic_tracking,
     v_limit,
-    min_area,
     alpha,
-    beta,
     cluster_size_limit,
 ):
     """
@@ -516,7 +518,6 @@ def assign_new_labels(
     in
     cells: list of cell objects, list
     labeled: labeled cell areas, array
-    last_labeled: last labeled cell areas, array
     field: 2d meteorological field, array
     cell_id: last used cell identifier, int
     nowdate: current datetime being investigated, datetime
@@ -526,7 +527,6 @@ def assign_new_labels(
     v_limit: limit of distance (in gridpoints) per timestept to advect search mask, float
     min_area: minimum area (in gridpoints) for a cell to be considered, int
     alpha: weight of overlap in score, float
-    beta: weight of velocity in score, float
     cluster_size_limit: maximum number of cells in a cluster, before more crude solution is applied to solving cluster, int
 
     out
@@ -548,27 +548,21 @@ def assign_new_labels(
         counts,
         overlap,
         last_active_area,
-        last_velocity,
-        last_center,
     ) = find_overlaps(
         cells,
         labeled,
-        last_labeled,
         flow_field,
         advection_method,
         dynamic_tracking,
         v_limit,
-        min_area,
     )
 
     available_labels = set(candidates)
 
-    candidate_center = []
     for candidate in candidates:
         coordinates = np.argwhere(labeled == candidate)
         area_center = np.mean(coordinates, axis=0)
         max_pos = coordinates[np.argmax(field[labeled == candidate])]
-        candidate_center.append(np.mean((area_center, max_pos), 0).tolist())
 
     # remove existing cells from initiation list (represents new cells that will be initiated later)
     labels = [x for x in labels if x not in available_labels]
@@ -579,11 +573,7 @@ def assign_new_labels(
         counts,
         overlap,
         last_active_area,
-        last_velocity,
-        last_center,
-        candidate_center,
         alpha,
-        beta,
         cluster_size_limit,
     )
 
@@ -703,11 +693,7 @@ def find_correspondences(
     counts,
     overlap,
     last_active_area,
-    last_velocity,
-    last_center,
-    candidate_center,
     alpha,
-    beta,
     cluster_size_limit,
 ):
     """
@@ -719,11 +705,7 @@ def find_correspondences(
     counts: number of gridpoints in cell candidates, list of lists
     overlap: overlap between active_ids and candidates, list of lists
     last_active_area: last active areas in gridpoints of cells: list
-    last_velocity: last cell velocity, list
-    last_center: last cell center, list
-    candidate_center: center of candidate cells, list
     alpha: weight of overlap in score, float
-    beta: weight of velocity in score, float
     cluster_size_limit: maximum number of cells in a cluster, before more crude solution is applied to solving cluster, int
 
     out
@@ -755,11 +737,7 @@ def find_correspondences(
             counts,
             overlap,
             last_active_area,
-            last_velocity,
-            last_center,
-            candidate_center,
             alpha,
-            beta,
             cluster_size_limit,
         )
 
@@ -780,11 +758,7 @@ def correspond_cluster(
     counts_all,
     overlap_all,
     last_active_area_all,
-    last_velocity_all,
-    last_center_all,
-    candidate_center_all,
     alpha,
-    beta,
     cluster_size_limit,
 ):
     """
@@ -797,11 +771,7 @@ def correspond_cluster(
     counts_all: gridpoint areas of new labeled areas, list
     overlap_all: overlap between tracked cells and candidates, list
     last_active_area_all: gridpoint areas of last timestep, list
-    last_velocity_all: last cell velocity, list
-    last_center_all: last cell center, list
-    candidate_center_all: center of candidate cells, list
     alpha: weight of overlap in score, float
-    beta: weight of velocity in score, float
     cluster_size_limit: maximum number of cells in cluster, int
 
     out
@@ -814,9 +784,6 @@ def correspond_cluster(
     counts = []
     overlap = []
     last_active_area = []
-    last_velocity = []
-    last_center = []
-    candidate_center = []
 
     for i, id in enumerate(active_ids):
         if id in cluster_ids:
@@ -825,9 +792,6 @@ def correspond_cluster(
             counts.append(counts_all[i])
             overlap.append(overlap_all[i])
             last_active_area.append(last_active_area_all[i])
-            last_velocity.append(last_velocity_all[i])
-            last_center.append(last_center_all[i])
-            candidate_center.append(candidate_center_all[i])
 
     # if candidaates are too long, shorten by means of overlap, so only the n candidates with highest overlap are considered
     if len(candidates) > cluster_size_limit:
@@ -837,18 +801,12 @@ def correspond_cluster(
             counts,
             overlap,
             last_active_area,
-            last_velocity,
-            last_center,
-            candidate_center,
         ) = prune_cluster(
             ids,
             candidates,
             counts,
             overlap,
             last_active_area,
-            last_velocity,
-            last_center,
-            candidate_center,
             cluster_size_limit,
         )
 
@@ -868,11 +826,7 @@ def correspond_cluster(
                         [last_active_area[i] for i in mask],
                         [overlap[i] for i in mask],
                         [counts[i] for i in mask],
-                        [last_velocity[i] for i in mask],
-                        [last_center[i] for i in mask],
-                        [candidate_center[i] for i in mask],
                         alpha,
-                        beta,
                     )
                 )
             else:
@@ -908,9 +862,6 @@ def prune_cluster(
     counts,
     overlap,
     last_active_area,
-    last_velocity,
-    last_center,
-    candidate_center,
     cluster_size_limit,
 ):
     """
@@ -922,9 +873,6 @@ def prune_cluster(
     counts: number of gridpoints in cell candidates, list
     overlap: overlap between tracked cells and candidates, list
     last_active_area: gridpoint areas of last timestep, list
-    last_velocity: last cell velocity, list
-    last_center: last cell center, list
-    candidate_center: center of candidate cells, list
     cluster_size_limit: maximum number of cells in cluster, int
 
     out
@@ -933,9 +881,6 @@ def prune_cluster(
     counts: number of gridpoints in cell candidates, list
     overlap: overlap between tracked cells and candidates, list
     last_active_area: gridpoint areas of last timestep, list
-    last_velocity: last cell velocity, list
-    last_center: last cell center, list
-    candidate_center: center of candidate cells, list
 
     """
     orig_size = len(ids)
@@ -963,9 +908,6 @@ def prune_cluster(
             counts.pop(min_index)
             overlap.pop(min_index)
             last_active_area.pop(min_index)
-            last_velocity.pop(min_index)
-            last_center.pop(min_index)
-            candidate_center.pop(min_index)
         else:
             break
 
@@ -1000,9 +942,6 @@ def prune_cluster(
         counts,
         overlap,
         last_active_area,
-        last_velocity,
-        last_center,
-        candidate_center,
     )
 
 
@@ -1069,12 +1008,10 @@ def find_cluster_members(active_ids, candidates):
 def find_overlaps(
     cells,
     labeled,
-    last_labeled,
     flow_field,
     advection_method,
     dynamic_tracking,
     v_limit,
-    min_area,
 ):
     """
     finds overlaping new labels from previous cells
@@ -1082,7 +1019,6 @@ def find_overlaps(
     in
     cells: list of cell objects, list
     labeled: labeled cell areas, array
-    last_labeled: last labeled cell areas, array
     flow_field: estimate of flow field, array
     advection_method: method used to advect cells, string
     dynamic_tracking: number of timesteps used for advecting search mask, int
@@ -1095,20 +1031,15 @@ def find_overlaps(
     counts: number of gridpoints in cell candidates, list
     overlap: overlap between tracked cells and candidates, list
     last_active_area: gridpoint areas of last timestep, list
-    last_velocity: last cell velocity, list
-    last_center: last cell center, list
     """
     active_ids = []
     candidates = []
     counts = []
     overlap = []
     last_active_area = []
-    last_velocity = []
-    last_center = []
 
     # find areas overlapping with last timestep
     for cell in cells:  # pre-existing, alive cells in list
-        last_active = last_labeled == cell.label[-1]
 
         new_delta_x, new_delta_y = determine_cell_movement(
             cell.delta_x,
@@ -1119,15 +1050,29 @@ def find_overlaps(
 
         if advection_method == "movement_vector":
             cell.search_vector.append([new_delta_x, new_delta_y])
-            last_active = advect_array(
-                flow_field, last_active, new_delta_x, new_delta_y
+            search_field = advect_coordinates(
+                flow_field, cell.field[-1], new_delta_x, new_delta_y
             )
+            # remove coordinates outside of domain
+            search_field = search_field[
+                (search_field[:, 0] >= 0)
+                & (search_field[:, 0] < labeled.shape[0])
+                & (search_field[:, 1] >= 0)
+                & (search_field[:, 1] < labeled.shape[1])
+            ]
+        else:
+            search_field = cell.field[-1]
 
-        laa = np.count_nonzero(last_active)
+        laa = cell.field[-1].shape[0]
 
-        cell.search_field.append(last_active)
+        cell.search_field.append(search_field)
 
-        new_cell_labels = get_new_labels(labeled[last_active], min_area)
+        masked_labels = np.zeros_like(labeled)
+
+        masked_labels[search_field[:, 0], search_field[:, 1]] = labeled[
+            search_field[:, 0], search_field[:, 1]
+        ]
+        new_cell_labels = get_new_labels(masked_labels)
 
         ovl = []
         area_gp = []
@@ -1139,7 +1084,7 @@ def find_overlaps(
         if new_cell_labels:
             for label in new_cell_labels:
                 ovl.append(
-                    np.count_nonzero(np.logical_and(labeled == label, last_active))
+                    np.count_nonzero(np.logical_and(labeled == label, masked_labels))
                 )
                 area_gp.append(np.sum(labeled == label))
                 ids.append(cell.cell_id)
@@ -1152,8 +1097,6 @@ def find_overlaps(
             counts.extend(area_gp)
             overlap.extend(ovl)
             last_active_area.extend(laas)
-            last_velocity.extend(lvel)
-            last_center.extend(lcent)
 
         else:
             cell.terminate("faded")
@@ -1164,8 +1107,6 @@ def find_overlaps(
         counts,
         overlap,
         last_active_area,
-        last_velocity,
-        last_center,
     )
 
 
@@ -1173,11 +1114,7 @@ def calculate_score(
     last_active_area,
     overlap,
     area_gp,
-    last_velocity,
-    last_center,
-    candidate_center,
     alpha,
-    beta,
 ):
     """
     calculate correspondence score between old feature and all new features
@@ -1186,11 +1123,7 @@ def calculate_score(
     last_active_area: gridpoint areas of last timestep, list
     overlap: overlap between tracked cells and candidates, list
     area_gp: gridpoint areas of new labeled areas, list
-    last_velocity: last cell velocity, list
-    last_center: last cell center, list
-    candidate_center: center of candidate cells, list
     alpha: weight of overlap in score, float
-    beta: weight of velocity in score, float
 
     out
     score: score of correspondence, float
@@ -1204,34 +1137,8 @@ def calculate_score(
     r_s = np.minimum(a_p, a_c) / np.maximum(a_p, a_c)  # surface ratio
 
     p_t = alpha * r_o + (1 - alpha) * r_s
-    area_score = p_t
+    score = p_t
 
-    # score based on velocity similarity from last to current timestep
-
-    beta = beta
-
-    if (None in [item for sublist in last_velocity for item in sublist]) | (
-        None in [item for sublist in last_center for item in sublist]
-    ):
-        score = area_score
-    else:
-        velocity_score = []
-        for i, _ in enumerate(last_velocity):
-            candidate_velocity = np.subtract(candidate_center[i], last_center[i])
-            estimate_magnitude = np.sqrt(
-                last_velocity[i][0] ** 2 + last_velocity[i][1] ** 2
-            )
-            estimate_error = np.subtract(candidate_velocity, last_velocity[i])
-            estimate_error_magnitude = np.sqrt(
-                estimate_error[0] ** 2 + estimate_error[1] ** 2
-            )
-            if estimate_magnitude == 0:
-                velocity_score.append(0)
-            else:
-                velocity_score.append(
-                    np.maximum(-estimate_error_magnitude / estimate_magnitude + 1, 0)
-                )
-        score = (1 - beta) * area_score + beta * np.mean(velocity_score)
     return score
 
 
@@ -1307,7 +1214,7 @@ def find_events(cells):
             )
 
 
-def get_new_labels(arr, min_area):
+def get_new_labels(arr, min_area=0):
     """
     returns new labels that overlay with old labels sorted with ascending count
 
