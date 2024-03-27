@@ -38,20 +38,34 @@ def main(inpath, outpath, paralel=False):
     # make sure output directory exists
     os.makedirs(outpath, exist_ok=True)
 
+    tracking_parameters = {
+        "min_area": 5, # 5
+        "aura": 4, # 3
+        "threshold": 5, # 5
+        "min_distance": 10, # 6
+        "prominence": 20, # 10
+        "peak_threshold": False,
+        "min_lifespan": 15,
+    }
+    # save tracking parameters to text file
+    with open(os.path.join(outpath, "tracking_parameters.txt"), "w") as f:
+        for key, value in tracking_parameters.items():
+            f.write("%s:%s\n" % (key, value))
+
     # create list of members
     members = [str(m).zfill(3) for m in range(11)]
-    # members = ['004']
+    # members = ['005']
 
     # iterate over member (todo: paralelize)
     if paralel:
         import multiprocessing as mp
         pool = mp.Pool(len(members))
-        pool.starmap(pipeline, [(member, inpath, outpath) for member in members])
+        pool.starmap(pipeline, [(member, inpath, outpath,tracking_parameters) for member in members])
     else:
         for member in members:
-            pipeline(member, inpath, outpath)
+            pipeline(member, inpath, outpath,tracking_parameters)
     
-def pipeline(member, inpath, outpath):
+def pipeline(member, inpath, outpath, tracking_parameters):
     # print("processing member: ", member)
 
     # load data
@@ -75,13 +89,7 @@ def pipeline(member, inpath, outpath):
         fields,
         timesteps,
         field_static=field_static,
-        min_area=5, # 5
-        aura=3,
-        threshold=5, # 5
-        min_distance=10, # 6
-        prominence=5,
-        peak_threshold=True,
-        min_lifespan = 15,
+        **tracking_parameters
     )
 
     # print("gap filling swaths")

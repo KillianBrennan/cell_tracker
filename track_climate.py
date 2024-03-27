@@ -36,13 +36,16 @@ from cell_tracker import (
 
 def main(inpath, outpath, start_day, end_day):
     # set tracking parameters
-    min_distance = 5
-    dynamic_tracking = 4
-    v_limit = 5
-    min_area = 9  # 16
-    quiet = True
-    aura = 1  # 0
-    threshold = 10.1  # 5
+    tracking_parameters = {
+        "min_distance": 5,
+        "dynamic_tracking": 4,
+        "v_limit": 5,
+        "min_area": 9,
+        "quiet": True,
+        "aura": 1,
+        "threshold": 10.1,
+        "min_lifespan": 15,
+    }
 
     start_day = pd.to_datetime(start_day, format="%Y-%m-%dT%H")
     end_day = pd.to_datetime(end_day, format="%Y-%m-%dT%H")
@@ -78,13 +81,7 @@ def main(inpath, outpath, start_day, end_day):
             fields,
             timesteps,
             field_static=field_static,
-            quiet=quiet,
-            min_distance=min_distance,
-            dynamic_tracking=dynamic_tracking,
-            v_limit=v_limit,
-            min_area=min_area,
-            threshold=threshold,
-            aura=aura,
+            **tracking_parameters,
         )
 
         print("gap filling swaths")
@@ -119,27 +116,27 @@ def main(inpath, outpath, start_day, end_day):
             },
         )
         # add lat lon
-        swath_gf_nc["lat"] = xr.DataArray(
-            ds["lat"].values,
-            dims=["rlat", "rlon"],
-            coords={"rlat": ds["rlat"].values, "rlon": ds["rlon"].values},
-        )
-        swath_gf_nc["lon"] = xr.DataArray(
-            ds["lon"].values,
-            dims=["rlat", "rlon"],
-            coords={"rlat": ds["rlat"].values, "rlon": ds["rlon"].values},
-        )
+        # swath_gf_nc["lat"] = xr.DataArray(
+        #     ds["lat"].values,
+        #     dims=["rlat", "rlon"],
+        #     coords={"rlat": ds["rlat"].values, "rlon": ds["rlon"].values},
+        # )
+        # swath_gf_nc["lon"] = xr.DataArray(
+        #     ds["lon"].values,
+        #     dims=["rlat", "rlon"],
+        #     coords={"rlat": ds["rlat"].values, "rlon": ds["rlon"].values},
+        # )
 
-        cell_swaths_nc["lat"] = xr.DataArray(
-            ds["lat"].values,
-            dims=["rlat", "rlon"],
-            coords={"rlat": ds["rlat"].values, "rlon": ds["rlon"].values},
-        )
-        cell_swaths_nc["lon"] = xr.DataArray(
-            ds["lon"].values,
-            dims=["rlat", "rlon"],
-            coords={"rlat": ds["rlat"].values, "rlon": ds["rlon"].values},
-        )
+        # cell_swaths_nc["lat"] = xr.DataArray(
+        #     ds["lat"].values,
+        #     dims=["rlat", "rlon"],
+        #     coords={"rlat": ds["rlat"].values, "rlon": ds["rlon"].values},
+        # )
+        # cell_swaths_nc["lon"] = xr.DataArray(
+        #     ds["lon"].values,
+        #     dims=["rlat", "rlon"],
+        #     coords={"rlat": ds["rlat"].values, "rlon": ds["rlon"].values},
+        # )
 
         # add long name to swath
         swath_gf_nc.attrs["long_name"] = "daily gap filled swath using cell tracking"

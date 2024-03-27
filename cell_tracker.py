@@ -445,11 +445,12 @@ def advect_array(flow_field, array, new_delta_x, new_delta_y):
                 coordinates = np.argwhere(array)
                 center = np.mean(coordinates, axis=0)
                 center = [int(round(x / 10)) for x in center]
-                new_delta_x = flow_field[center[0], center[1], 1]
-                new_delta_y = flow_field[center[0], center[1], 0]
+                new_delta_x = flow_field[center[0], center[1], 0]
+                new_delta_y = flow_field[center[0], center[1], 1]
 
-    array = np.roll(array, int(round(new_delta_x)), axis=1)
-    array = np.roll(array, int(round(new_delta_y)), axis=0)
+    # this is the right way, the axes are flipped
+    array = np.roll(array, int(round(new_delta_x)), axis=0)
+    array = np.roll(array, int(round(new_delta_y)), axis=1)  
 
     return array
 
@@ -1447,6 +1448,7 @@ class Cell:
         # field of area where cell is searched for (extrapolated from last step, first is None)
         self.search_field = [None]
         self.search_vector = [[0, 0]]
+        self.associate_members = []
 
     def __str__(self):
         """
@@ -1745,31 +1747,57 @@ class Cell:
             self.search_field.insert(0, None)
             self.search_vector.insert(0, [0, 0])
 
-    def append_associates(self, cells, field_static=None):
+    def append_associates(self, cells, field_static=None, recursion_depth=3):
         """
         appends all associated cells to self cell
-
+        recursive function, limited to 3 by default!
         in
         cells: list of cell objects, list
         field_static: static field, dict
+        recursion_depth: depth of recursion, int
         """
         cell_ids = [cell.cell_id for cell in cells]
+        recursion_depth -= 1
 
         if self.parent is not None:
-            # print('cell has parent',self.cell_id, self.parent)
             if self.parent in cell_ids:
-                self.append_cell(cells[self.parent], field_static)
+                if recursion_depth > 0:
+                    to_append = copy.deepcopy(cells[self.parent])
+                    to_append.append_associates(
+                        cells,
+                        field_static,
+                        recursion_depth=recursion_depth,
+                    )
+                else:
+                    to_append = cells[self.parent]
+                self.append_cell(to_append, field_static)
 
         if len(self.child) > 0:
-            # print('cell has children',self.cell_id, self.child)
             for child in self.child:
                 if child in cell_ids:
-                    self.append_cell(cells[child], field_static)
+                    if recursion_depth > 0:
+                        to_append = copy.deepcopy(cells[child])
+                        to_append.append_associates(
+                            cells,
+                            field_static,
+                            recursion_depth=recursion_depth,
+                        )
+                    else:
+                        to_append = cells[child]
+                    self.append_cell(to_append, field_static)
 
         if self.merged_to is not None:
-            # print('cell has merged to',self.cell_id, self.merged_to)
             if self.merged_to in cell_ids:
-                self.append_cell(cells[self.merged_to], field_static)
+                if recursion_depth > 0:
+                    to_append = copy.deepcopy(cells[self.merged_to])
+                    to_append.append_associates(
+                        cells,
+                        field_static,
+                        recursion_depth=recursion_depth,
+                    )
+                else:
+                    to_append = cells[self.merged_to]
+                self.append_cell(to_append, field_static)
 
     def append_cell(self, cell_to_append, field_static=None):
         """
@@ -1780,11 +1808,18 @@ class Cell:
         cell_to_append: cell to append, Cell
         field_static: static field, dict
         """
+        if cell_to_append.cell_id in self.associate_members:
+            return
+        else:
+            self.associate_members.extend(
+                [cell_to_append.cell_id] + cell_to_append.associate_members
+            )
+
         # print(self.datelist)
         idx = 0
         self_start_time = self.datelist[0]
         self_end_time = self.datelist[-1]
-        
+
         for i, nowdate in enumerate(cell_to_append.datelist):
             # print(nowdate)
             # both cells exist simultaneously
@@ -2032,6 +2067,51 @@ class Cell:
         self.swath = []
 
 
+def filter_cells_lifespan(cells, min_lifespan):
+    """
+    filters cells by minimum lifespan
+
+    in
+    cells: list of cell objects, list
+    min_lifespan: minimum lifespan in minutes, int
+
+    out
+    cells: list of cell objects, list
+    """
+    return [
+        cell
+        for cell in cells
+        if cell.lifespan >= np.timedelta64(int(min_lifespan), "m")
+    ]
+
+
+def remove_dublicate_cells(cells):
+    """
+    removes shorter lived cells that have the same associate members as longer lived cells
+
+    in
+    cells: list of cell objects, list
+
+    out
+    cells: list of cell objects, list
+    """
+    # sort longlived cells by lifespan
+    cells.sort(key=lambda c: c.lifespan, reverse=True)
+
+    # if a cell is already accounted for, skip it
+    accounted = []
+    filtered = []
+    for cell in cells:
+        members = [cell.cell_id] + cell.associate_members
+        if any([m in accounted for m in members]):
+            continue
+        else:
+            accounted.extend(members)
+            filtered.append(cell)
+
+    return filtered
+
+
 def write_to_json(cellss, filename):
     """
     writes ascii file containing cell object information
@@ -2102,6 +2182,7 @@ def write_masks_to_netcdf(
     datelist,
     field_static,
     filename,
+    include_lat_lon=True,
 ):
     """
     writes netcdf file containing cell masks
@@ -2160,11 +2241,16 @@ def write_masks_to_netcdf(
             "y": np.arange(field_static["lat"].shape[0]),
             "x": np.arange(field_static["lon"].shape[1]),
         }
-        data_structure = {
-            "cell_mask": (["time", "y", "x"], mask_array),
-            "lat": (["y", "x"], field_static["lat"]),
-            "lon": (["y", "x"], field_static["lon"]),
-        }
+        if include_lat_lon:
+            data_structure = {
+                "cell_mask": (["time", "y", "x"], mask_array),
+                "lat": (["y", "x"], field_static["lat"]),
+                "lon": (["y", "x"], field_static["lon"]),
+            }
+        else:
+            data_structure = {
+                "cell_mask": (["time", "y", "x"], mask_array),
+            }
     else:
         coords = {
             "member": members,
@@ -2172,11 +2258,16 @@ def write_masks_to_netcdf(
             "y": np.arange(field_static["lat"].shape[0]),
             "x": np.arange(field_static["lon"].shape[1]),
         }
-        data_structure = {
-            "cell_mask": (["member", "time", "y", "x"], mask_array),
-            "lat": (["y", "x"], field_static["lat"]),
-            "lon": (["y", "x"], field_static["lon"]),
-        }
+        if include_lat_lon:
+            data_structure = {
+                "cell_mask": (["member", "time", "y", "x"], mask_array),
+                "lat": (["y", "x"], field_static["lat"]),
+                "lon": (["y", "x"], field_static["lon"]),
+            }
+        else:
+            data_structure = {
+                "cell_mask": (["member", "time", "y", "x"], mask_array),
+            }
 
     # create netcdf file
     ds = xr.Dataset(
