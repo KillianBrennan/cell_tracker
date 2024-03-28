@@ -456,7 +456,7 @@ def advect_coordinates(flow_field, active_gps, new_delta_x, new_delta_y):
 
 
     # todo: this factor 2 should not be needed, somewhere a timestep is skipped
-    active_gps_shifted = active_gps + 2*np.array([new_delta_x, new_delta_y])
+    active_gps_shifted = active_gps + np.array([new_delta_x, new_delta_y])
     # print(active_gps.mean(axis=0), active_gps_shifted.mean(axis=0))
 
     return np.round(active_gps_shifted).astype(int)
@@ -476,11 +476,13 @@ def determine_cell_movement(delta_x, delta_y, n_timesteps_max, v_limit):
     new_delta_x: movement vector x-component, float
     new_delta_y: movement vector y-component, float
     """
-    if len(delta_x) < 2:  # first is always 0
-        return None, None
 
+    # first two timesteps are just movement vector (first is (0,0) anyway)
+    if len(delta_x) <= 2:
+        return delta_x[-1], delta_y[-1]
+    
     # at the beginning not all past timesteps are available
-    n_timesteps = min(len(delta_x) - 1, n_timesteps_max)
+    n_timesteps = min(len(delta_x) , n_timesteps_max)
 
     new_delta_x = 0
     new_delta_y = 0
