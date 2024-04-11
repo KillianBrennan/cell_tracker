@@ -33,7 +33,7 @@ from cell_tracker import (
     write_masks_to_netcdf,
 )
 
-def main(inpath, outpath, paralel=False):
+def main(inpath, outpath, parallel=False):
 
     # make sure output directory exists
     os.makedirs(outpath, exist_ok=True)
@@ -56,8 +56,8 @@ def main(inpath, outpath, paralel=False):
     members = [str(m).zfill(3) for m in range(11)]
     # members = ['005']
 
-    # iterate over member (todo: paralelize)
-    if paralel:
+    if parallel:
+        print('tracking in parallel')
         import multiprocessing as mp
         pool = mp.Pool(len(members))
         pool.starmap(pipeline, [(member, inpath, outpath,tracking_parameters) for member in members])
@@ -71,8 +71,9 @@ def pipeline(member, inpath, outpath, tracking_parameters):
     # load data
     memberpath = os.path.join(inpath, member)
 
+    # only loads the first 24 hours 
     ds = xr.open_mfdataset(
-        os.path.join(memberpath, "lfff*.nc"), combine="by_coords"
+        os.path.join(memberpath, "lfff00*.nc"), combine="by_coords"
     )
 
     field_static = {}
@@ -204,7 +205,7 @@ if __name__ == "__main__":
     )
     p.add_argument("inpath", type=str, help="path to input files")
     p.add_argument("outpath", type=str, help="path to output files")
-
+    p.add_argument("--parallel", action="store_true", help="run in parallel")
     args = p.parse_args()
 
     main(**vars(args))
