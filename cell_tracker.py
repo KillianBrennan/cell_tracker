@@ -56,6 +56,7 @@ def track_cells(
     quiet: bool = True,
     cluster_size_limit: int = 16,
     peak_threshold: bool = False,
+    sparse_memory: bool = False,
 ) -> list:
     """
     finds cells using initial cells and tracking them forwards through overlapping area from t-1 to t
@@ -78,6 +79,7 @@ def track_cells(
     quiet: suppress tqdm output, bool
     cluster_size_limit: maximum number of cells in a cluster, before more crude solution is applied to solving cluster, int
     peak_threshold: if True, maxima of cell must exceed threshold+prominence to be considered a cell, if False, maxima of cell must only exceed threshold to be considered a cell and prominence is only used to segregate between neighboring cells, bool
+    sparse_memory: if True, only the data is kept in memory that is used for .json and .nc output, bool
 
     out
     cells: list of cell objects, list
@@ -148,6 +150,10 @@ def track_cells(
                 np.count_nonzero(labeled == cells_alive[-1].label[-1])
             )
             cell_id += 1
+
+        if sparse_memory:
+            for cell in cells_alive:
+                cell.purge_memory()
 
         # remove dead cells from cells_alive
         for cell in cells_alive:
@@ -814,6 +820,34 @@ def correspond_cluster(
             cluster_size_limit,
         )
 
+    new_labels = []
+    new_ids = []
+    scores_filtered = []
+
+    # if cluster pruning was not enough, resort to assigning best score candidate first, starting with the active id with the smallest area, until cluster_size_limit is reached
+    if len(candidates) > cluster_size_limit:
+         (
+            ids,
+            candidates,
+            counts,
+            overlap,
+            last_active_area,
+            new_labels,
+            new_ids,
+            scores_filtered,
+        ) = crude_correspondence(
+            ids,
+            candidates,
+            counts,
+            overlap,
+            last_active_area,
+            alpha,
+            cluster_size_limit,
+            new_labels,
+            new_ids,
+            scores_filtered,
+        )
+
     permutations = permutate_cluster(ids, candidates)
     scores = []
     mean_scores = []
@@ -844,10 +878,6 @@ def correspond_cluster(
     scores = [x for _, x in sorted(zip(mean_scores, scores), reverse=True)]
     mean_scores = sorted(mean_scores, reverse=True)
 
-    new_labels = []
-    new_ids = []
-    scores_filtered = []
-
     # chose best permutation
     for i, perm in enumerate(permutations[0]):
         if perm:
@@ -859,6 +889,61 @@ def correspond_cluster(
 
     return new_ids, new_labels, scores_filtered
 
+def crude_correspondence(ids, candidates, counts, overlap, last_active_area, alpha, cluster_size_limit, new_ids, new_labels, scores_filtered):
+    """
+    if cluster is still too big, assign best score candidate first, starting with the active id with the smallest area, until cluster_size_limit is reached
+    starting with the smallest active ids, the better correspondence algorithm which is more expensive, is reserved for the larger objects
+
+    in
+    ids: tracked cell ids in cluster, list
+    candidates: cell candidates, list
+    counts: number of gridpoints in cell candidates, list
+    overlap: overlap between tracked cells and candidates, list
+    last_active_area: gridpoint areas of last timestep, list
+    alpha: weight of overlap in score, float
+    cluster_size_limit: maximum number of cells in cluster, int
+    new_ids: these ids can be assigned with new_labels, list
+    new_labels: new labels to assign to new_ids, list
+    scores_filtered: scores of the correspondences, list
+
+    out
+    ids: tracked cell ids in cluster, list
+    candidates: cell candidates, list
+    counts: number of gridpoints in cell candidates, list
+    overlap: overlap between tracked cells and candidates, list
+    last_active_area: gridpoint areas of last timestep, list
+    new_ids: these ids can be assigned with new_labels, list
+    new_labels: new labels to assign to new_ids, list
+    scores_filtered: scores of the correspondences, list
+    """
+    print('using crude correspondence method to reduce cluster size further')
+    while len(ids) > cluster_size_limit:
+        smallest_id = ids[np.argmin(last_active_area)]
+        mask = [smallest_id == i for i in ids]
+        mask = list(itertools.compress(range(len(ids)), mask))
+        best_score = np.inf
+        best_index = None
+        for i, index in enumerate(mask):
+            score = calculate_score(
+                [last_active_area[index]],
+                [overlap[index]],
+                [counts[index]],
+                alpha,
+            )
+            if score < best_score:
+                best_score = score
+                best_index = index
+        
+        new_ids.append(ids.pop(best_index))
+        new_labels.append(candidates.pop(best_index))
+        scores_filtered.append(best_score)
+        counts.pop(best_index)
+        overlap.pop(best_index)
+        last_active_area.pop(best_index)
+
+    return ids, candidates, counts, overlap, last_active_area, new_labels, new_ids, scores_filtered
+
+    
 
 def prune_cluster(
     ids,
@@ -1420,6 +1505,13 @@ class Cell:
                 int(np.round(self.mass_center_y[-1])),
             ]
         )
+
+    def purge_memory(self):
+        """
+        purge cell data not used for tracking anymore and not needed for .json or .nc output
+        """
+        # only last timestep of search field is needed
+        self.search_field[:-1] = []
 
     def is_in_box(self, lat_lim, lon_lim):
         """
