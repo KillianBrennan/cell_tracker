@@ -16,7 +16,7 @@ example use:
 python /home/kbrennan/cell_tracker/track_climate_precip.py /home/kbrennan/phd/data/climate/present/5min_2D/ /home/kbrennan/phd/data/climate/tracks/present/test_precip 20210620 20210620
 
 with memory profiling:
-python -m memory_profiler -o /home/kbrennan/cell_tracker/20210620_precip_mbenchmark.prof /home/kbrennan/cell_tracker/track_climate_precip.py /home/kbrennan/phd/data/climate/present/5min_2D/ /home/kbrennan/phd/data/climate/tracks/present/test_precip 20210620 20210620
+mprof run --python /home/kbrennan/cell_tracker/track_climate_precip.py /home/kbrennan/phd/data/climate/present/5min_2D/ /home/kbrennan/phd/data/climate/tracks/present/test_precip 20210620 20210620
 
 with compute profiling:
 python -m cProfile -o /home/kbrennan/cell_tracker/20210620_precip_cbenchmark.prof /home/kbrennan/cell_tracker/track_climate_precip.py /home/kbrennan/phd/data/climate/present/5min_2D/ /home/kbrennan/phd/data/climate/tracks/present/test_precip 20210620 20210620
@@ -55,8 +55,8 @@ def main(inpath, outpath, start_day, end_day):
         "alpha": 0.5,
         "min_lifespan": 30,
         "aura": 1,
-        "quiet": False,
-        "cluster_size_limit": 12,
+        "quiet": True,
+        "cluster_size_limit": 10,
         "sparse_memory": True,
     }
 

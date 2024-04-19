@@ -15,6 +15,9 @@ output:
 example use:
 python /home/kbrennan/cell_tracker/track_climate.py /home/kbrennan/phd/data/climate/present/5min_2D /home/kbrennan/phd/data/climate/tracks/present/test 20210628 20210628
 
+memory profiling:
+mprof run --python /home/kbrennan/cell_tracker/track_climate.py /home/kbrennan/phd/data/climate/present/5min_2D /home/kbrennan/phd/data/climate/tracks/present/test 20210628 20210628
+
 """
 
 import os
