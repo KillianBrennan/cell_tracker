@@ -29,6 +29,7 @@ import argparse
 import xarray as xr
 import pandas as pd
 import numpy as np
+import datetime as dt
 
 import _pickle as cPickle
 
@@ -55,7 +56,7 @@ def main(inpath, outpath, start_day, end_day):
         "min_lifespan": 30,
         "aura": 1,
         "quiet": False,
-        "cluster_size_limit": 16,
+        "cluster_size_limit": 12,
         "sparse_memory": True,
     }
 
@@ -78,6 +79,9 @@ def main(inpath, outpath, start_day, end_day):
         path = os.path.join(inpath, "lffd" + day.strftime("%Y%m%d") + "_0606.nz")
 
         ds = xr.open_dataset(path, engine="netcdf4")
+
+        # round minutes to 5
+        ds["time"] = ds["time"].dt.round("5min")
 
         field_static = {}
         field_static["lat"] = ds["lat"].values

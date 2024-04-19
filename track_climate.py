@@ -13,7 +13,7 @@ output:
     cell_masks_YYYYMMDD.nc: netcdf file containing cell masks
 
 example use:
-python /home/kbrennan/cell_tracker/track_climate.py /home/kbrennan/phd/data/climate/5min_2D/present /home/kbrennan/phd/data/climate/tracks/present/test 20210628 20210628
+python /home/kbrennan/cell_tracker/track_climate.py /home/kbrennan/phd/data/climate/present/5min_2D /home/kbrennan/phd/data/climate/tracks/present/test 20210628 20210628
 
 """
 
@@ -23,6 +23,7 @@ import argparse
 import xarray as xr
 import pandas as pd
 import numpy as np
+import datetime as dt
 
 import _pickle as cPickle
 
@@ -66,6 +67,9 @@ def main(inpath, outpath, start_day, end_day):
         path = os.path.join(inpath, "lffd" + day.strftime("%Y%m%d") + "_0606.nz")
 
         ds = xr.open_dataset(path, engine="netcdf4")
+        
+        # round minutes to 5
+        ds["time"] = ds["time"].dt.round("5min")
 
         field_static = {}
         field_static["lat"] = ds["lat"].values
