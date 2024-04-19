@@ -79,7 +79,7 @@ def track_cells(
     quiet: suppress tqdm output, bool
     cluster_size_limit: maximum number of cells in a cluster, before more crude solution is applied to solving cluster, int
     peak_threshold: if True, maxima of cell must exceed threshold+prominence to be considered a cell, if False, maxima of cell must only exceed threshold to be considered a cell and prominence is only used to segregate between neighboring cells, bool
-    sparse_memory: if True, only the data is kept in memory that is used for .json and .nc output, bool
+    sparse_memory: if True, to reduce memory usage, only the data is kept in memory that is used for .json and .nc output, bool
 
     out
     cells: list of cell objects, list
